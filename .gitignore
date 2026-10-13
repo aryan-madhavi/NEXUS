@@ -1,0 +1,68 @@
+# Build artifacts
+build/
+cmake-build-*/
+out/
+dist/
+
+# ESP-IDF generated files
+firmware/build/
+firmware/sdkconfig.old
+firmware/sdkconfig.backup
+firmware/dependencies.lock
+firmware/managed_components/
+
+# Preserve the project's intentional default configuration
+!firmware/sdkconfig.defaults
+
+# Python virtual environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+secrets/
+credentials/
+
+# Local AI model weights and caches
+models/
+*.gguf
+*.safetensors
+*.onnx
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Local databases and generated telemetry
+*.sqlite
+*.sqlite3
+*.db
+
+# Generated dashboard and service state
+ground_station/data/
+ground_station/logs/

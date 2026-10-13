@@ -1,4 +1,4 @@
-# Apollo-inspired EDU_ROBO
+NEXUS - Networked Environmental eXecutive with Unified Sensing
 
 Project specification: [`docs/PROJECT_BLUEPRINT.md`](docs/PROJECT_BLUEPRINT.md)
 

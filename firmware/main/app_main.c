@@ -13,7 +13,7 @@
 #define MONITOR_STACK_WORDS 3072U
 #define MONITOR_PRIORITY 2U
 
-static const char *TAG = "apollo_boot";
+static const char *TAG = "nexus_boot";
 
 static void heartbeat_task(void *arg)
 {
@@ -34,7 +34,7 @@ static void heartbeat_task(void *arg)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Apollo EDU_ROBO bootstrap starting");
+    ESP_LOGI(TAG, "NEXUS bootstrap starting");
     ESP_LOGI(TAG, "reset_reason=%d", (int)esp_reset_reason());
 
     BaseType_t created = xTaskCreate(heartbeat_task,

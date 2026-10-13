@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EDU_ROBO ESP32 — Reference Spec Sheet</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1f2937;
+    --border: #2d3748;
+    --accent: #38bdf8;
+    --accent2: #a78bfa;
+    --accent3: #34d399;
+    --warn: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 24px 20px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--accent);
+    padding-bottom: 16px;
+    margin-bottom: 28px;
+  }
+  .kit-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.2;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  /* SECTION */
+  section { margin-bottom: 32px; }
+  h2 {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--accent2);
+    border-left: 3px solid var(--accent2);
+    padding-left: 8px;
+    margin-bottom: 12px;
+  }
+
+  /* GRID LAYOUTS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 700px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* CARD */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+  }
+  .card-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent3);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* TABLE */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  thead th {
+    background: var(--surface2);
+    color: var(--muted);
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 5px 10px; vertical-align: top; }
+  tbody tr:hover td { background: var(--surface2); }
+  .gpio { color: var(--accent); font-weight: 600; }
+  .fn { color: var(--text); }
+  .ch { color: var(--warn); font-weight: 600; }
+  .note { color: var(--muted); font-size: 11px; }
+
+  /* TAG */
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    margin: 1px 2px;
+  }
+  .tag-io   { background: #1e3a5f; color: var(--accent); }
+  .tag-mux  { background: #2d1f50; color: var(--accent2); }
+  .tag-out  { background: #1a3a2a; color: var(--accent3); }
+  .tag-warn { background: #3a2a00; color: var(--warn); }
+
+  /* Soldering status */
+  tr.soldered td { }
+  tr.not-soldered td { color: var(--muted); opacity: 0.55; text-decoration: line-through; text-decoration-color: #f87171; }
+  tr.not-soldered td:first-child { text-decoration: none; }
+  .status-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-yes  { background: #1a3a2a; color: var(--accent3); border: 1px solid #2d6b4a; }
+  .badge-no   { background: #2a1a1a; color: #f87171; border: 1px solid #6b2d2d; }
+  .badge-ext  { background: #2a2a1a; color: var(--warn); border: 1px solid #6b5a00; }
+  .legend {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 12px; font-family: var(--mono); font-size: 11px; color: var(--muted);
+    align-items: center;
+  }
+
+  /* LIST */
+  ul.clean { list-style: none; padding: 0; }
+  ul.clean li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  ul.clean li:last-child { border-bottom: none; }
+  ul.clean .lk { color: var(--muted); font-size: 11px; }
+  ul.clean .lv { color: var(--text); text-align: right; }
+
+  /* SAFETY NOTICE */
+  .notice {
+    background: #1a1200;
+    border: 1px solid #5a3e00;
+    border-left: 3px solid var(--warn);
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .notice strong { color: var(--warn); font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 6px; }
+  .notice ul { padding-left: 16px; color: #d4b860; font-size: 12px; line-height: 1.8; }
+
+  /* MUX TRUTH TABLE */
+  .truth { font-family: var(--mono); font-size: 11px; }
+  .truth td { text-align: center; padding: 4px 12px; }
+  .truth thead th { text-align: center; }
+  .hi { color: #4ade80; }
+  .lo { color: #f87171; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kit-title">Go-Green Technologies Pvt. Ltd. — GSTN: 27AABCY4791J1ZS — V14 / Lab Manual V4</div>
+  <h1>EDU_ROBO IoT Trainer Kit — ESP32 Reference Spec Sheet</h1>
+  <div class="subtitle">AI-agent reference · All pin assignments, components, and operational parameters for the ESP32-WROOM-32 DevKit V1 (30-pin) platform</div>
+</header>
+
+<!-- BUILD STATUS SUMMARY -->
+<section style="margin-bottom:24px;">
+  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
+    <div class="card" style="border-color:#2d6b4a;">
+      <div class="card-title" style="color:var(--accent3);">✔ Soldered on PCB</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text);line-height:2;">
+        R1–R13 (all resistors) · D1, D3 (diodes) · Q3 (BC547) · 7805 · LD117AS33TR · 74HC595 · CD4051 · L293D · PC817 · IC2 (Hall) · LDR · TSOP1838 · Buzzer · MOC7811 · LED1–LED5 · ESP32 DevKit · Push switch · Female burg headers · Power jack (J1)
+      </div>
+    </div>
+    <div class="card" style="border-color:#6b5a00;">
+      <div class="card-title" style="color:var(--warn);">⬡ Header-Mounted (plug-in modules)</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text);line-height:2.2;">
+        <span class="status-badge badge-ext">HC-SR04</span> Ultrasonic — ULTRA connector (IO25/IO26)<br>
+        <span class="status-badge badge-ext">DHT-11</span> Temp/Humidity — DHT-11 connector (IO19)<br>
+        <span class="status-badge badge-ext">HW-870</span> IR/Gas Sensor — IR-GAS1 connector (MUX X0)
+      </div>
+    </div>
+    <div class="card" style="border-color:#6b2d2d;">
+      <div class="card-title" style="color:#f87171;">✗ Not Present on This Build</div>
+      <div style="font-family:var(--mono);font-size:11px;color:#94a3b8;line-height:2;">
+        C1–C3 (caps) · DC Motors · Relay (K1) · 16×2 LCD · Motor clamps · Power connectors · USB cable · Battery connector · 5-pin motor connector · Dummy wheel · BO tyres · 10k Potentiometer · Plastic box · Jumper wires
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BOARD IDENTITY -->
+<section>
+  <h2>Board Identity &amp; Power</h2>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">Microcontroller</div>
+      <ul class="clean">
+        <li><span class="lk">MCU</span><span class="lv">ESP32-WROOM-32 DevKit V1 (30-pin)</span></li>
+        <li><span class="lk">Board name (Arduino IDE)</span><span class="lv">DOIT ESP32DEVKIT-V1</span></li>
+        <li><span class="lk">Wi-Fi / BT</span><span class="lv">Yes (built-in)</span></li>
+        <li><span class="lk">Signal voltage max</span><span class="lv">3.3 V (no negatives)</span></li>
+        <li><span class="lk">Max current per pin</span><span class="lv">10 mA</span></li>
+        <li><span class="lk">Programming key</span><span class="lv">Hold BOOT, release after upload</span></li>
+        <li><span class="lk">Reset</span><span class="lv">RESET switch</span></li>
+        <li><span class="lk">USB port</span><span class="lv">Micro USB Type-B</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">Power Rails</div>
+      <ul class="clean">
+        <li><span class="lk">Input</span><span class="lv">+12 V DC (board supply)</span></li>
+        <li><span class="lk">Regulated +5 V</span><span class="lv">via 7805 TO-92</span></li>
+        <li><span class="lk">Regulated +3.3 V</span><span class="lv">via LD117AS33TR</span></li>
+        <li><span class="lk">ESP32 / LCD power</span><span class="lv">USB (isolated from DC supply)</span></li>
+        <li><span class="lk">Onboard power to ESP32</span><span class="lv">2-pin jumper option</span></li>
+        <li><span class="lk">Power indicator</span><span class="lv">+5 V LED (Push-to-ON switch)</span></li>
+        <li><span class="lk">Reverse polarity protection</span><span class="lv">1N4004 diode (D3) at jack</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">Key ICs on Board</div>
+      <ul class="clean">
+        <li><span class="lk">Shift register (LCD/74HC595)</span><span class="lv">74HC595-SO16</span></li>
+        <li><span class="lk">Analog mux</span><span class="lv">CD4051-SO16</span></li>
+        <li><span class="lk">Motor driver</span><span class="lv">L293D</span></li>
+        <li><span class="lk">Opto-isolator (relay)</span><span class="lv">PC817</span></li>
+        <li><span class="lk">Hall effect IC</span><span class="lv">IC2 (on-board)</span></li>
+        <li><span class="lk">5 V regulator</span><span class="lv">7805 TO-92</span></li>
+        <li><span class="lk">3.3 V regulator</span><span class="lv">LD117AS33TR</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- GPIO PIN MAP -->
+<section>
+  <h2>ESP32 GPIO Pin Map — Full Reference</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>GPIO</th><th>Connected Device / Function</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="gpio">GPIO 1</td><td class="fn">TV IR Receiver (TSOP1838)</td><td class="note">Input only</td></tr>
+        <tr><td class="gpio">GPIO 2</td><td class="fn">CD4051 Select Line B</td><td class="note">Mux control</td></tr>
+        <tr><td class="gpio">GPIO 3</td><td class="fn">Relay</td><td class="note">via PC817 opto → BC547 → G5LE relay</td></tr>
+        <tr><td class="gpio">GPIO 4</td><td class="fn">CD4051 Select Line A</td><td class="note">Mux control</td></tr>
+        <tr><td class="gpio">GPIO 5</td><td class="fn">CD4051 Select Line C</td><td class="note">Mux control</td></tr>
+        <tr><td class="gpio">GPIO 12</td><td class="fn">LED-3 &amp; L293D Motor Driver 3A</td><td class="note">Shared with motor / LED3</td></tr>
+        <tr><td class="gpio">GPIO 13</td><td class="fn">LED-4 &amp; L293D Motor Driver 4A</td><td class="note">Shared with motor / LED4</td></tr>
+        <tr><td class="gpio">GPIO 14</td><td class="fn">LED-2 &amp; L293D Motor Driver 2A</td><td class="note">Shared with motor / LED2</td></tr>
+        <tr><td class="gpio">GPIO 15</td><td class="fn">Buzzer</td><td class="note">5 V buzzer (BUZ)</td></tr>
+        <tr><td class="gpio">GPIO 16</td><td class="fn">GSM-GPS Module &amp; 74HC595 SCK</td><td class="note">UART2 RXD / shift reg clock</td></tr>
+        <tr><td class="gpio">GPIO 17</td><td class="fn">GSM-GPS Module &amp; 74HC595 SER</td><td class="note">UART2 TXD / shift reg data</td></tr>
+        <tr><td class="gpio">GPIO 18</td><td class="fn">Touch Sensor</td><td class="note">VSPI_CLK capable</td></tr>
+        <tr><td class="gpio">GPIO 19</td><td class="fn">DHT-11 Sensor</td><td class="note">Temp &amp; humidity</td></tr>
+        <tr><td class="gpio">GPIO 21</td><td class="fn">74HC595 RCK &amp; LCD Enable</td><td class="note">SDA capable; latch for shift reg</td></tr>
+        <tr><td class="gpio">GPIO 22</td><td class="fn">L293D Motor Driver EN (Enable)</td><td class="note">Both 1-2EN and 3-4EN tied to IO22</td></tr>
+        <tr><td class="gpio">GPIO 23</td><td class="fn">Vibration Sensor / BMP180 SDA</td><td class="note">Also Ultrasonic Echo pin</td></tr>
+        <tr><td class="gpio">GPIO 25</td><td class="fn">BMP180 SDA &amp; Ultrasonic Trigger</td><td class="note">DAC_1 capable</td></tr>
+        <tr><td class="gpio">GPIO 26</td><td class="fn">BMP180 SCL &amp; Ultrasonic Echo</td><td class="note">DAC_2 capable</td></tr>
+        <tr><td class="gpio">GPIO 27</td><td class="fn">LED-1 &amp; L293D Motor Driver 1A</td><td class="note">Shared with motor / LED1</td></tr>
+        <tr><td class="gpio">GPIO 32</td><td class="fn">Sound Sensor</td><td class="note">ADC1 capable</td></tr>
+        <tr><td class="gpio">GPIO 33</td><td class="fn">Servo Motor</td><td class="note">PWM output</td></tr>
+        <tr><td class="gpio">GPIO 34</td><td class="fn">Optocoupler (MOC7811)</td><td class="note">Input only (no internal pull-up)</td></tr>
+        <tr><td class="gpio">GPIO 35</td><td class="fn">LDR Sensor</td><td class="note">Input only; ADC1</td></tr>
+        <tr><td class="gpio">GPIO 36</td><td class="fn">CD4051 Multiplexer Output (ADO)</td><td class="note">Input only; SENSOR_VP</td></tr>
+        <tr><td class="gpio">GPIO 39</td><td class="fn">LM35 Temperature Sensor</td><td class="note">Input only; SENSOR_VN</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- CD4051 MUX -->
+<section>
+  <h2>CD4051 Analog Multiplexer — Channel Map</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Channel → Sensor Assignment</div>
+      <table>
+        <thead><tr><th>Channel</th><th>Connected Sensor</th></tr></thead>
+        <tbody>
+          <tr><td class="ch">X0</td><td>ADXL-335 (X-axis) / GAS-1 / IR-1</td></tr>
+          <tr><td class="ch">X1</td><td>ADXL-335 (Y-axis) / Hall Sensor / GAS-2 / IR-2</td></tr>
+          <tr><td class="ch">X2</td><td>ADXL-335 (Z-axis) / Moisture Sensor</td></tr>
+          <tr><td class="ch">X3</td><td>Water Level / Rain Sensor</td></tr>
+          <tr><td class="ch">X4</td><td>IR Line Tracker-1</td></tr>
+          <tr><td class="ch">X5</td><td>IR Line Tracker-2 / Sharp IR</td></tr>
+          <tr><td class="ch">X6</td><td>IR Line Tracker-3</td></tr>
+          <tr><td class="ch">X7</td><td>Variable Potentiometer (10k)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Control Lines &amp; Output</div>
+      <ul class="clean">
+        <li><span class="lk">Select A</span><span class="lv">GPIO 4</span></li>
+        <li><span class="lk">Select B</span><span class="lv">GPIO 2</span></li>
+        <li><span class="lk">Select C</span><span class="lv">GPIO 5</span></li>
+        <li><span class="lk">Output (X pin)</span><span class="lv">GPIO 36 (ADO / IO-36)</span></li>
+        <li><span class="lk">VCC</span><span class="lv">+3.3 V</span></li>
+        <li><span class="lk">VEE / GND</span><span class="lv">GND</span></li>
+        <li><span class="lk">INH (Inhibit)</span><span class="lv">GND (always enabled)</span></li>
+      </ul>
+      <br>
+      <div class="card-title" style="margin-top:8px;">Channel Selection Truth Table</div>
+      <table class="truth">
+        <thead><tr><th>C (IO5)</th><th>B (IO2)</th><th>A (IO4)</th><th>Selected Channel</th></tr></thead>
+        <tbody>
+          <tr><td class="lo">0</td><td class="lo">0</td><td class="lo">0</td><td class="ch">X0</td></tr>
+          <tr><td class="lo">0</td><td class="lo">0</td><td class="hi">1</td><td class="ch">X1</td></tr>
+          <tr><td class="lo">0</td><td class="hi">1</td><td class="lo">0</td><td class="ch">X2</td></tr>
+          <tr><td class="lo">0</td><td class="hi">1</td><td class="hi">1</td><td class="ch">X3</td></tr>
+          <tr><td class="hi">1</td><td class="lo">0</td><td class="lo">0</td><td class="ch">X4</td></tr>
+          <tr><td class="hi">1</td><td class="lo">0</td><td class="hi">1</td><td class="ch">X5</td></tr>
+          <tr><td class="hi">1</td><td class="hi">1</td><td class="lo">0</td><td class="ch">X6</td></tr>
+          <tr><td class="hi">1</td><td class="hi">1</td><td class="hi">1</td><td class="ch">X7</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- SUBSYSTEMS -->
+<section>
+  <h2>Subsystem Pin Summary</h2>
+  <div class="grid-2">
+
+    <div class="card">
+      <div class="card-title">L293D Motor Driver</div>
+      <ul class="clean">
+        <li><span class="lk">Enable (EN / 1-2EN / 3-4EN)</span><span class="lv">GPIO 22</span></li>
+        <li><span class="lk">1A (Motor 1, direction)</span><span class="lv">GPIO 27</span></li>
+        <li><span class="lk">2A (Motor 2, direction)</span><span class="lv">GPIO 14</span></li>
+        <li><span class="lk">3A (Motor 3, direction)</span><span class="lv">GPIO 12</span></li>
+        <li><span class="lk">4A (Motor 4, direction)</span><span class="lv">GPIO 13</span></li>
+        <li><span class="lk">VCC1</span><span class="lv">+3.3 V (logic)</span></li>
+        <li><span class="lk">VCC2</span><span class="lv">+5 V (motor supply)</span></li>
+        <li><span class="lk">Motor connector</span><span class="lv">SHS-05 Male &amp; Female (5-pin)</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">LCD (16×2) via 74HC595</div>
+      <ul class="clean">
+        <li><span class="lk">74HC595 SER (data)</span><span class="lv">GPIO 17</span></li>
+        <li><span class="lk">74HC595 SCK (clock)</span><span class="lv">GPIO 16</span></li>
+        <li><span class="lk">74HC595 RCK (latch) / LCD E</span><span class="lv">GPIO 21</span></li>
+        <li><span class="lk">LCD RS</span><span class="lv">QC of 74HC595</span></li>
+        <li><span class="lk">LCD DB4–DB7</span><span class="lv">QD–QG of 74HC595</span></li>
+        <li><span class="lk">LCD VCC</span><span class="lv">+3.3 V</span></li>
+        <li><span class="lk">Contrast (R10)</span><span class="lv">2.2 kΩ to GND</span></li>
+        <li><span class="lk">Arduino var D1=IO21, D2=IO16, D3=IO17</span><span class="lv">—</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Relay Interface</div>
+      <ul class="clean">
+        <li><span class="lk">GPIO</span><span class="lv">GPIO 3</span></li>
+        <li><span class="lk">Drive chain</span><span class="lv">GPIO 3 → PC817 → BC547 (Q3) → G5LE relay</span></li>
+        <li><span class="lk">Relay type</span><span class="lv">5VT73 / G5LE, 5 V DC coil</span></li>
+        <li><span class="lk">Relay contacts</span><span class="lv">X3-1 (NO), X3-2 (P/COM), X3-3 (NC)</span></li>
+        <li><span class="lk">Flyback diode</span><span class="lv">1N400x (D1) across coil</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Ultrasonic (HC-SR04)</div>
+      <ul class="clean">
+        <li><span class="lk">Trigger</span><span class="lv">GPIO 25</span></li>
+        <li><span class="lk">Echo</span><span class="lv">GPIO 26</span></li>
+        <li><span class="lk">VCC</span><span class="lv">+3.3 V (connector)</span></li>
+      </ul>
+      <br>
+      <div class="card-title" style="margin-top:8px;">BMP180 Pressure Sensor</div>
+      <ul class="clean">
+        <li><span class="lk">SDA</span><span class="lv">GPIO 25</span></li>
+        <li><span class="lk">SCL</span><span class="lv">GPIO 26</span></li>
+        <li><span class="lk">Note</span><span class="lv">Shares pins with Ultrasonic — use one at a time</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">LEDs &amp; Buzzer</div>
+      <ul class="clean">
+        <li><span class="lk">LED1</span><span class="lv">GPIO 27</span></li>
+        <li><span class="lk">LED2</span><span class="lv">GPIO 14</span></li>
+        <li><span class="lk">LED3</span><span class="lv">GPIO 12</span></li>
+        <li><span class="lk">LED4</span><span class="lv">GPIO 13</span></li>
+        <li><span class="lk">LED type</span><span class="lv">SMD 1206 (onboard) / 5MM LED (LED5)</span></li>
+        <li><span class="lk">LED series resistors</span><span class="lv">330 Ω (R2–R5)</span></li>
+        <li><span class="lk">Buzzer</span><span class="lv">GPIO 15 (5 V, active)</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Servo Motor</div>
+      <ul class="clean">
+        <li><span class="lk">Primary pin</span><span class="lv">GPIO 33 (PWM)</span></li>
+        <li><span class="lk">Alternate (DHT pin)</span><span class="lv">GPIO 19</span></li>
+        <li><span class="lk">Connector wiring</span><span class="lv">Brown=GND, Red=+5V, Orange=Signal</span></li>
+        <li><span class="lk">Library</span><span class="lv">ServoESP32</span></li>
+      </ul>
+      <br>
+      <div class="card-title" style="margin-top:8px;">Stepper Motor</div>
+      <ul class="clean">
+        <li><span class="lk">Coil pins</span><span class="lv">GPIO 27 (1A), 14 (2A), 12 (3A), 13 (4A)</span></li>
+        <li><span class="lk">+5 V coil supply</span><span class="lv">Red wire</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">GPS / GSM Module</div>
+      <ul class="clean">
+        <li><span class="lk">TX (GPS → ESP)</span><span class="lv">GPIO 16 (UART2 RXD)</span></li>
+        <li><span class="lk">RX (ESP → GPS)</span><span class="lv">GPIO 17 (UART2 TXD)</span></li>
+        <li><span class="lk">Also shared with</span><span class="lv">74HC595 SCK/SER — use one at a time</span></li>
+        <li><span class="lk">VCC</span><span class="lv">+3.3 V</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Direct-Read Sensors</div>
+      <ul class="clean">
+        <li><span class="lk">DHT-11 (temp/humidity)</span><span class="lv">GPIO 19</span></li>
+        <li><span class="lk">LM35 (temperature, analog)</span><span class="lv">GPIO 39</span></li>
+        <li><span class="lk">LDR (light, analog)</span><span class="lv">GPIO 35</span></li>
+        <li><span class="lk">Sound sensor</span><span class="lv">GPIO 32</span></li>
+        <li><span class="lk">Touch sensor</span><span class="lv">GPIO 18</span></li>
+        <li><span class="lk">Vibration sensor</span><span class="lv">GPIO 23</span></li>
+        <li><span class="lk">Optocoupler (MOC7811)</span><span class="lv">GPIO 34</span></li>
+        <li><span class="lk">Hall sensor</span><span class="lv">MUX X1 (read via GPIO 36)</span></li>
+        <li><span class="lk">TSOP1838 (TV IR)</span><span class="lv">GPIO 1</span></li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- SENSOR CONNECTOR REFERENCE -->
+<section>
+  <h2>Sensor Connector Pin-Out Reference</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Connector Label</th><th>Pin 1</th><th>Pin 2</th><th>Pin 3</th><th>Pin 4</th><th>ESP32 Signal</th></tr></thead>
+      <tbody>
+        <tr><td>PRESSURE (BMP180)</td><td>+3V3</td><td>GND</td><td>IO-25</td><td>IO-26</td><td>SDA=IO25, SCL=IO26</td></tr>
+        <tr><td>ADXL-335</td><td>GND</td><td>X23</td><td>X13</td><td>X03</td><td>Z=X0, Y=X1, X=X2 via MUX</td></tr>
+        <tr><td>SOUND</td><td>+3V3</td><td>GND</td><td>IO-32</td><td>—</td><td>IO32</td></tr>
+        <tr><td>SERVO</td><td>GND</td><td>+5V</td><td>IO-33</td><td>—</td><td>IO33 (PWM)</td></tr>
+        <tr><td>LEVEL/RAIN</td><td>+5V</td><td>GND</td><td>—</td><td>X33 (MUX X3)</td><td>X3 via MUX</td></tr>
+        <tr><td>MOISTURE</td><td>+5V</td><td>GND</td><td>—</td><td>X23 (MUX X2)</td><td>X2 via MUX</td></tr>
+        <tr><td>IR-GAS1</td><td>+5V</td><td>GND</td><td>—</td><td>X03 (MUX X0)</td><td>X0 via MUX</td></tr>
+        <tr><td>IR-GAS2</td><td>+5V</td><td>GND</td><td>—</td><td>X13 (MUX X1)</td><td>X1 via MUX</td></tr>
+        <tr><td>TRACKER (Line follower)</td><td>X43</td><td>X53</td><td>X63</td><td>+5V</td><td>X4, X5, X6 via MUX</td></tr>
+        <tr><td>ULTRA (Ultrasonic)</td><td>+3V3</td><td>IO-25</td><td>IO-26</td><td>GND</td><td>TRIG=IO25, ECHO=IO26</td></tr>
+        <tr><td>GPS</td><td>+3V3</td><td>IO-16</td><td>IO-17</td><td>GND</td><td>TX=IO16, RX=IO17</td></tr>
+        <tr><td>DHT-11</td><td>+3V3</td><td>IO-19</td><td>GND</td><td>—</td><td>IO19</td></tr>
+        <tr><td>TOUCH</td><td>GND</td><td>+3V3</td><td>IO-18</td><td>—</td><td>IO18</td></tr>
+        <tr><td>VIBRATION</td><td>+3V3</td><td>GND</td><td>IO-23</td><td>—</td><td>IO23</td></tr>
+        <tr><td>SHARP IR</td><td>X33 (MUX X3?)</td><td>GND</td><td>+3V3</td><td>—</td><td>X5 via MUX</td></tr>
+        <tr><td>HALL (IC2)</td><td>VCC</td><td>GND</td><td>OUT</td><td>—</td><td>X1 via MUX</td></tr>
+        <tr><td>LM35</td><td>+3V3</td><td>IO-39</td><td>GND</td><td>—</td><td>IO39</td></tr>
+        <tr><td>MOTOR (L293D output)</td><td>+5V</td><td>Q0</td><td>Q1</td><td>Q2</td><td>Q3 — motor outputs</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- COMPONENT LIST -->
+<section>
+  <h2>Bill of Materials — V14 (Actual Build Status)</h2>
+  <div class="card">
+    <div class="legend">
+      <span><span class="status-badge badge-yes">SOLDERED</span> — permanently on PCB</span>
+      <span><span class="status-badge badge-ext">HEADER-MOUNTED</span> — module plugs into female pins you soldered</span>
+      <span><span class="status-badge badge-no">NOT PRESENT</span> — not on this build</span>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Reference</th><th>Component</th><th>Value / Part Number</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>R1, R9, R12, R13</td><td>Resistor</td><td>1 kΩ</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>2</td><td>R2, R3, R4, R5, R11</td><td>Resistor</td><td>330 Ω (LED series / opto)</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>3</td><td>R6, R8</td><td>Resistor</td><td>100 Ω</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>4</td><td>R7</td><td>Resistor</td><td>10 kΩ</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>5</td><td>R10</td><td>Resistor</td><td>2.2 kΩ (LCD contrast)</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>6</td><td>LED1–LED4</td><td>SMD LED</td><td>SMD 1206</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>7</td><td>LED5</td><td>Through-hole LED (power indicator)</td><td>5 mm LED</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>8</td><td>C1, C2, C3</td><td>Capacitor</td><td>0.1 µF</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>9</td><td>D1, D3</td><td>Diode</td><td>1N 4004</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>10</td><td>Q3</td><td>NPN Transistor</td><td>BC 547</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>11</td><td>7805</td><td>5 V Regulator</td><td>7805 TO-92</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>12</td><td>LD117</td><td>3.3 V Regulator</td><td>LD117AS33TR</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>13</td><td>74HC595</td><td>Shift Register</td><td>74HC595-SO16</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>14</td><td>CD4051</td><td>Analog Multiplexer</td><td>CD4051-SO16</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>15</td><td>L293D</td><td>Motor Driver IC</td><td>L293D</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>16</td><td>PC817</td><td>Opto-isolator (relay drive)</td><td>PC817</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>17</td><td>IC2</td><td>Hall Effect Sensor</td><td>On-board (X1 MUX)</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>18</td><td>LDR</td><td>Light Sensor</td><td>LDR 3 mm</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>19</td><td>TSOP1838</td><td>TV IR Receiver</td><td>TSOP1838 (38 kHz)</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>20</td><td>BUZ</td><td>Buzzer</td><td>5 V Active Buzzer</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>21</td><td>HC-SR04</td><td>Ultrasonic Sensor</td><td>HC-SR04</td><td><span class="status-badge badge-ext">HEADER-MOUNTED</span></td></tr>
+        <tr><td>22</td><td>MOC7811</td><td>Optocoupler / slot sensor</td><td>MOC7811</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>23</td><td>DC Motor ×2</td><td>BO1 DC Motor</td><td>VJT389, 5 V DC</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>24</td><td>K1</td><td>Relay</td><td>5VT73 / G5LE, 5 V DC</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>25</td><td>LCD1</td><td>16×2 LCD Display</td><td>16×2 LCD</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>26</td><td>Motor Clamp ×2</td><td>Motor mount</td><td>VJT303 CLAMP</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>27</td><td>Power Connectors</td><td>Board connectors</td><td>58/2C Vital, 58/3C Vital</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>28</td><td>USB Cable</td><td>Programming cable</td><td>Micro USB Type-B</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>29</td><td>Battery Connector</td><td>9 V snap</td><td>Black Snap Battery Connector</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>30</td><td>Motor Connector</td><td>5-pin motor connector</td><td>SHS-05 Male &amp; Female</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>31</td><td>Dummy Wheel</td><td>Caster wheel</td><td>Dummy Wheel</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>32</td><td>Tyres ×2</td><td>BO tyre</td><td>BO Tyers</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>33</td><td>VM842</td><td>Microcontroller</td><td>ESP32-WROOM-32 DevKit V1 (30-pin)</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>34</td><td>POT</td><td>Potentiometer</td><td>10 kΩ 3296</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>35</td><td>DHT-11</td><td>Temp &amp; Humidity Sensor</td><td>DHT-11</td><td><span class="status-badge badge-ext">HEADER-MOUNTED</span></td></tr>
+        <tr><td>36</td><td>HW-870</td><td>IR / Gas Sensor</td><td>HW-870 (IR-GAS1, MUX X0)</td><td><span class="status-badge badge-ext">HEADER-MOUNTED</span></td></tr>
+        <tr><td>37</td><td>SW</td><td>Push-to-ON switch</td><td>PCB Mount PUSH ON/OFF</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>38</td><td>Burg Strip</td><td>Headers (female pins soldered for modules)</td><td>40×1 Male &amp; Female</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>39</td><td>PCB</td><td>Main board</td><td>Go-Green Double-Sided PCB</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+        <tr><td>40</td><td>Box</td><td>Enclosure</td><td>Plastic Box 1680 mL</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>41</td><td>Wires</td><td>Jumper wires</td><td>Male-Female, Female-Female</td><td><span class="status-badge badge-no">NOT PRESENT</span></td></tr>
+        <tr><td>42</td><td>J1</td><td>Power Jack</td><td>DC Barrel Jack</td><td><span class="status-badge badge-yes">SOLDERED</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ARDUINO IDE / SOFTWARE -->
+<section>
+  <h2>Arduino IDE — Software Configuration</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Board Setup</div>
+      <ul class="clean">
+        <li><span class="lk">Board manager URL</span><span class="lv">https://dl.espressif.com/dl/package_esp32_index.json</span></li>
+        <li><span class="lk">Package</span><span class="lv">esp32 by Espressif Systems</span></li>
+        <li><span class="lk">Board selection</span><span class="lv">DOIT ESP32DEVKIT-V1</span></li>
+        <li><span class="lk">Upload method</span><span class="lv">Press &amp; release BOOT key during upload</span></li>
+        <li><span class="lk">Restart</span><span class="lv">RESET switch</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">Required Libraries</div>
+      <ul class="clean">
+        <li><span class="lk">IoT platform</span><span class="lv">Blynk, ThingSpeak</span></li>
+        <li><span class="lk">IR remote</span><span class="lv">IRremote</span></li>
+        <li><span class="lk">Temp/humidity</span><span class="lv">DHT_sensor_library</span></li>
+        <li><span class="lk">LCD</span><span class="lv">LiquidCrystal-master</span></li>
+        <li><span class="lk">Servo</span><span class="lv">ServoESP32</span></li>
+        <li><span class="lk">Stepper</span><span class="lv">Stepper</span></li>
+        <li><span class="lk">Tone / buzzer</span><span class="lv">Tone32-master</span></li>
+        <li><span class="lk">Kit helper</span><span class="lv">EduIntro</span></li>
+        <li><span class="lk">DDS function gen</span><span class="lv">MD_AD9833</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ASSEMBLY -->
+<section>
+  <h2>Robot Assembly — Step Summary</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Step</th><th>Action</th><th>Hardware Used</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Fix motor clamps to bottom of PCB</td><td>VJT303 clamps + 10 mm screws (through PCB)</td></tr>
+        <tr><td>2</td><td>Insert screws through DC motors</td><td>25 mm screws through BO1 VJT389 motor (top &amp; bottom)</td></tr>
+        <tr><td>3</td><td>Attach motors to clamps</td><td>Nuts to secure DC motors to VJT303 clamps</td></tr>
+        <tr><td>4</td><td>Fit caster/support screws</td><td>Three 40 mm screws on bottom of PCB + nuts</td></tr>
+        <tr><td>5</td><td>Attach wheels &amp; dummy wheel</td><td>BO tyres ×2, Dummy Wheel (caster)</td></tr>
+        <tr><td>6</td><td>Connect motor wires</td><td>SHS-05 5-pin motor connector to board MOTOR header</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- OPERATIONAL SAFETY -->
+<section>
+  <h2>Operational Safety Rules</h2>
+  <div class="notice">
+    <strong>⚠ Critical — Read Before Powering</strong>
+    <ul>
+      <li>Switch OFF DC supply before making any external wiring connections.</li>
+      <li>Maximum GPIO signal voltage: 3.3 V. No negative signals permitted.</li>
+      <li>Maximum current draw per GPIO pin: 10 mA.</li>
+      <li>Verify polarity of all ICs, LEDs, diodes, and sensors before powering.</li>
+      <li>For LCD, Stepper, DC Motor, Servo, and Relay — consult connector details in this sheet before wiring.</li>
+      <li>ESP32 power via USB is isolated from the board's 12 V DC supply.</li>
+      <li>If any component becomes hot or emits burning smell — cut AC mains and remove USB immediately.</li>
+      <li>If POWER LED does not illuminate after inspection — return kit for maintenance; do not self-diagnose live.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- QUICK REFERENCE TAGS -->
+<section>
+  <h2>Quick Reference — Peripheral Tags</h2>
+  <div class="card" style="line-height:2.2">
+    <span class="tag tag-io">IO1=TSOP</span>
+    <span class="tag tag-io">IO2=MUX_B</span>
+    <span class="tag tag-io">IO3=RELAY</span>
+    <span class="tag tag-io">IO4=MUX_A</span>
+    <span class="tag tag-io">IO5=MUX_C</span>
+    <span class="tag tag-io">IO12=LED3/M3A</span>
+    <span class="tag tag-io">IO13=LED4/M4A</span>
+    <span class="tag tag-io">IO14=LED2/M2A</span>
+    <span class="tag tag-io">IO15=BUZZER</span>
+    <span class="tag tag-io">IO16=595_SCK</span>
+    <span class="tag tag-io">IO17=595_SER</span>
+    <span class="tag tag-io">IO18=TOUCH</span>
+    <span class="tag tag-io">IO19=DHT11</span>
+    <span class="tag tag-io">IO21=595_RCK/LCD_E</span>
+    <span class="tag tag-io">IO22=MOTOR_EN</span>
+    <span class="tag tag-io">IO23=VIBRATION</span>
+    <span class="tag tag-io">IO25=ULTRA_TRIG/BMP_SDA</span>
+    <span class="tag tag-io">IO26=ULTRA_ECHO/BMP_SCL</span>
+    <span class="tag tag-io">IO27=LED1/M1A</span>
+    <span class="tag tag-io">IO32=SOUND</span>
+    <span class="tag tag-io">IO33=SERVO</span>
+    <span class="tag tag-io">IO34=OPTO</span>
+    <span class="tag tag-io">IO35=LDR</span>
+    <span class="tag tag-io">IO36=MUX_OUT</span>
+    <span class="tag tag-io">IO39=LM35</span>
+    <span class="tag tag-mux">X0=ADXL-X/GAS1/IR1</span>
+    <span class="tag tag-mux">X1=ADXL-Y/HALL/GAS2/IR2</span>
+    <span class="tag tag-mux">X2=ADXL-Z/MOISTURE</span>
+    <span class="tag tag-mux">X3=LEVEL/RAIN</span>
+    <span class="tag tag-mux">X4=IR_TRACKER1</span>
+    <span class="tag tag-mux">X5=IR_TRACKER2/SHARP</span>
+    <span class="tag tag-mux">X6=IR_TRACKER3</span>
+    <span class="tag tag-mux">X7=POTENTIOMETER</span>
+    <span class="tag tag-out">MUX_A=IO4, MUX_B=IO2, MUX_C=IO5</span>
+    <span class="tag tag-warn">Max 3.3V signal</span>
+    <span class="tag tag-warn">Max 10mA/pin</span>
+  </div>
+</section>
+
+<footer style="margin-top:32px; padding-top:12px; border-top:1px solid var(--border); color:var(--muted); font-family:var(--mono); font-size:10px;">
+  Go-Green Technologies Pvt. Ltd. · EDU_ROBO IoT Kit · Lab Manual V4 / Component List V14 · Generated for AI-agent reference use
+</footer>
+
+</body>
+</html>

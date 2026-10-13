@@ -1,4 +1,6 @@
-# Apollo-inspired EDU_ROBO Environmental Monitoring & Local-AI Ground Station
+# NEXUS - Networked Environmental eXecutive with Unified Sensing
+
+## An Apollo-Inspired Embedded Environmental Monitoring and Local-AI Ground Station
 
 **Baseline:** 2026-10-11 · **Target schedule:** 1–2 weeks · **Hardware authority:** EDU_ROBO IoT Trainer Kit, ESP32-WROOM-32 DevKit V1 (30-pin), V14 / Lab Manual V4 reference sheet.
 
@@ -198,7 +200,7 @@ AI answer contract: report units and time windows; identify data gaps; distingui
 ## 10. Repository layout
 
 ```text
-apollo-edu-robo/
+NEXUS/
   README.md
   docs/PROJECT_BLUEPRINT.md
   firmware/
