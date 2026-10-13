@@ -1,1 +1,13 @@
-idf_component_register(SRCS "app_main.c" INCLUDE_DIRS ".")
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "data_structures/nexus_job_table.c"
+        "data_structures/nexus_ready_queue.c"
+        "data_structures/nexus_event_queue.c"
+        "data_structures/nexus_ring_buffer.c"
+        "executive/nexus_executive.c"
+    INCLUDE_DIRS
+        "."
+        "data_structures"
+        "executive"
+)
