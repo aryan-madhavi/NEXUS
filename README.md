@@ -1,7 +1,8 @@
 NEXUS - Networked Environmental eXecutive with Unified Sensing
 
-Project specification: [`docs/PROJECT_BLUEPRINT.md`](docs/PROJECT_BLUEPRINT.md)
+Project specification: [`docs/PROJECT_BLUEPRINT.md`](docs/PROJECT_BLUEPRINT.md)  
+Milestone documentation & technical records: [`docs/milestones/README.md`](docs/milestones/README.md)
 
-The firmware scaffold is being established in stages. The first development gate is to install/activate ESP-IDF on Fedora, identify the USB serial device, and build/flash a minimal heartbeat application before adding sensor drivers.
+The firmware is developed in modular milestones. Milestone 1 (Bootstrap), Milestone 2 (Executive & Data Structures), Milestone 3 (Sensors), and Milestone 3.1 (Timing Contract Correction & Baseline) are fully implemented, verified, and accepted. Milestone 4 (Unified Connection Manager & Transports) is implemented with passing host tests and a clean ESP-IDF build, pending source-audit remediation and hardware validation.
 
-Target: classic ESP32 (`idf.py set-target esp32`), ESP-IDF + FreeRTOS. The EDU_ROBO V14 reference sheet is the pin-map authority; verify hardware conflicts and electrical limits before enabling sensors.
+Target: classic ESP32 (`idf.py set-target esp32`), ESP-IDF v6.0.1 + FreeRTOS. The EDU_ROBO V14 reference sheet ([`docs/SPEC_SHEET.md`](docs/SPEC_SHEET.md)) is the pin-map authority; verify hardware conflicts and electrical limits before enabling sensors.
