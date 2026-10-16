@@ -6,8 +6,15 @@ idf_component_register(
         "data_structures/nexus_event_queue.c"
         "data_structures/nexus_ring_buffer.c"
         "executive/nexus_executive.c"
+        "sensors/nexus_sensor_registry.c"
+        "sensors/nexus_adc.c"
+        "sensors/nexus_adc_ldr.c"
+        "sensors/nexus_cd4051.c"
+        "sensors/nexus_dht11.c"
+        "sensors/nexus_sensors.c"
     INCLUDE_DIRS
         "."
         "data_structures"
         "executive"
+        "sensors"
 )

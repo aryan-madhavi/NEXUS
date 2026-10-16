@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 
 #include "nexus_executive.h"
+#include "nexus_sensors.h"
 
 #define EXECUTIVE_TICK_PERIOD_MS 100U
 #define EXECUTIVE_TASK_STACK_WORDS 4096U
@@ -22,6 +23,9 @@ static const char *TAG = "nexus_main";
 
 /* Global static executive instance (bounded memory, zero heap allocation for structures) */
 static nexus_executive_t s_executive;
+
+/* Global static sensor registry instance */
+static nexus_sensor_registry_t s_sensor_registry;
 
 /* Application periodic heartbeat job (Priority Class 0) */
 static bool job_heartbeat(void *user_ctx)
@@ -52,6 +56,14 @@ static bool job_executive_metrics(void *user_ctx)
              exec->stats.queue_overflows,
              exec->ready_queue.high_water_mark,
              exec->event_queue.high_water_mark);
+
+    for (uint16_t i = 0; i < s_sensor_registry.count; i++) {
+        nexus_sensor_descriptor_t *s = nexus_sensor_get_by_index(&s_sensor_registry, i);
+        if (s) {
+            ESP_LOGI(TAG, "sensor[%s]: raw=%" PRId32 " proc=%" PRId32 " flags=0x%02X samples=%" PRIu32 " errs=%" PRIu32,
+                     s->name, s->latest_raw, s->latest_processed, s->sample_flags, s->sample_count, s->error_count);
+        }
+    }
     return true;
 }
 
@@ -87,6 +99,13 @@ static void executive_task(void *arg)
         ESP_LOGE(TAG, "Failed to register metrics job");
     }
 
+    /* Register Priority Class 1 Sensor Acquisition Jobs (LDR, CD4051, DHT11) */
+    if (!nexus_sensors_register_jobs(&s_sensor_registry, exec)) {
+        ESP_LOGE(TAG, "Failed to register sensor jobs with executive");
+    } else {
+        ESP_LOGI(TAG, "Registered Priority Class 1 sensor acquisition jobs");
+    }
+
     nexus_executive_emit_event(exec,
                                NEXUS_EVENT_TYPE_SYSTEM_BOOT,
                                NEXUS_SEVERITY_INFO,
@@ -104,7 +123,7 @@ static void executive_task(void *arg)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "NEXUS Milestone 2 Executive initializing");
+    ESP_LOGI(TAG, "NEXUS Milestone 3 Executive & Sensors initializing");
     ESP_LOGI(TAG, "reset_reason=%d", (int)esp_reset_reason());
 
     /* 1. Run deterministic executive and data-structure self-tests */
@@ -118,7 +137,14 @@ void app_main(void)
     /* 2. Initialize runtime executive instance */
     nexus_executive_init(&s_executive, EXECUTIVE_TICK_PERIOD_MS);
 
-    /* 3. Spawn FreeRTOS task hosting executive tick */
+    /* 3. Initialize sensor registry and hardware drivers */
+    if (!nexus_sensors_init(&s_sensor_registry)) {
+        ESP_LOGW(TAG, "Sensor initialization completed with warnings/partial drivers");
+    } else {
+        ESP_LOGI(TAG, "All sensor drivers and registry initialized successfully");
+    }
+
+    /* 4. Spawn FreeRTOS task hosting executive tick */
     BaseType_t created = xTaskCreate(executive_task,
                                      "nexus_exec",
                                      EXECUTIVE_TASK_STACK_WORDS,

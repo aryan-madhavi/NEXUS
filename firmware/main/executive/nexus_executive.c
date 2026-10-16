@@ -1,6 +1,22 @@
 #include "nexus_executive.h"
 #include <string.h>
 
+#ifdef ESP_PLATFORM
+#include "esp_timer.h"
+static inline int64_t executive_get_time_us(void)
+{
+    return esp_timer_get_time();
+}
+#else
+#include <time.h>
+static inline int64_t executive_get_time_us(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ((int64_t)ts.tv_sec * 1000000LL) + ((int64_t)ts.tv_nsec / 1000LL);
+}
+#endif
+
 void nexus_executive_init(nexus_executive_t *exec, uint32_t tick_period_ms)
 {
     if (!exec) {
@@ -130,23 +146,26 @@ void nexus_executive_tick(nexus_executive_t *exec, int64_t current_time_us)
         dispatches_this_tick++;
 
         /* Record dispatch latency if periodic */
+        uint32_t dispatch_latency_us = 0U;
         if (job->last_run_us > 0 && job->period_ms > 0) {
             int64_t expected_time = job->last_run_us + ((int64_t)job->period_ms * 1000LL);
             if (current_time_us > expected_time) {
-                uint32_t latency_us = (uint32_t)(current_time_us - expected_time);
-                if (latency_us > exec->stats.max_dispatch_latency_us) {
-                    exec->stats.max_dispatch_latency_us = latency_us;
+                dispatch_latency_us = (uint32_t)(current_time_us - expected_time);
+                if (dispatch_latency_us > exec->stats.max_dispatch_latency_us) {
+                    exec->stats.max_dispatch_latency_us = dispatch_latency_us;
                 }
             }
         }
 
         job->last_run_us = current_time_us;
 
-        /* Execute work function */
+        /* Execute work function and measure actual duration */
+        int64_t start_work_us = executive_get_time_us();
         bool success = job->work_fn(job->user_ctx);
+        int64_t end_work_us = executive_get_time_us();
 
-        /* Measure duration if time is monotonic */
-        uint32_t duration_us = 100U; /* Nominal fallback duration */
+        uint32_t duration_us = (end_work_us >= start_work_us) ?
+                               (uint32_t)(end_work_us - start_work_us) : 0U;
         job->last_duration_us = duration_us;
         if (duration_us > exec->stats.max_job_duration_us) {
             exec->stats.max_job_duration_us = duration_us;
@@ -168,17 +187,25 @@ void nexus_executive_tick(nexus_executive_t *exec, int64_t current_time_us)
                                        (int32_t)job->failure_count);
         }
 
-        /* Check deadline violation */
+        /* Check deadline violation:
+         * A deadline is missed if:
+         * 1) Delayed dispatch: dispatch latency alone exceeded the job deadline budget, OR
+         * 2) Over-budget callback: the execution duration exceeded the job deadline budget, OR
+         * 3) Total turnaround (dispatch latency + duration) exceeded the job deadline budget.
+         */
         if (job->deadline_ms > 0) {
             uint32_t deadline_us = job->deadline_ms * 1000U;
-            if (duration_us > deadline_us) {
+            if (duration_us > deadline_us || dispatch_latency_us > deadline_us ||
+                (dispatch_latency_us + duration_us) > deadline_us) {
                 job->deadline_miss_count++;
                 exec->stats.deadline_misses++;
+                uint32_t miss_metric_us = (duration_us > deadline_us) ?
+                                          duration_us : (dispatch_latency_us + duration_us);
                 nexus_executive_emit_event(exec,
                                            NEXUS_EVENT_TYPE_DEADLINE_MISS,
                                            NEXUS_SEVERITY_WARN,
                                            job->job_id,
-                                           (int32_t)duration_us);
+                                           (int32_t)miss_metric_us);
             }
         }
     }
