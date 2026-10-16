@@ -43,10 +43,10 @@ struct nexus_job_descriptor {
     nexus_job_fn_t work_fn;
     void *user_ctx;
     uint32_t period_ms;          /* 0 for one-shot, >0 for periodic */
-    uint32_t deadline_ms;        /* Expected max execution runtime; 0 if unspecified */
+    uint32_t deadline_ms;        /* Max permitted callback execution duration (ms); 0 if unspecified */
     uint32_t run_count;          /* Successful runs */
     uint32_t failure_count;      /* Failed runs */
-    uint32_t deadline_miss_count;/* Runs that exceeded deadline */
+    uint32_t deadline_miss_count;/* Runs that exceeded execution budget */
     int64_t last_run_us;         /* Timestamp of last execution start (microseconds) */
     uint32_t last_duration_us;   /* Duration of last execution (microseconds) */
 };

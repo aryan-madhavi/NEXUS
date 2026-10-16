@@ -290,7 +290,7 @@ static void test_executive_scheduling_and_deadline_miss_accounting(void)
                                                   overbudget_job_fn,
                                                   NULL,
                                                   0, /* one-shot */
-                                                  5); /* 5 ms deadline */
+                                                  5); /* 5 ms execution budget */
     assert(j_ovb > 0);
     assert(nexus_executive_submit_job(&exec, j_ovb));
 
@@ -303,9 +303,17 @@ static void test_executive_scheduling_and_deadline_miss_accounting(void)
     assert(desc_ovb != NULL);
     assert(desc_ovb->deadline_miss_count == 1);
     assert(desc_ovb->last_duration_us >= 5000); /* Confirmed over 5ms budget */
+    assert(exec.stats.max_job_duration_us >= 5000);
 
-    /* 2. Test Delayed dispatch detection:
-     * Register a periodic job with period = 100ms, deadline = 10ms. */
+    /* Verify event emitted in event queue */
+    nexus_event_t ev;
+    assert(nexus_event_queue_pop(&exec.event_queue, &ev));
+    assert(ev.event_type == NEXUS_EVENT_TYPE_DEADLINE_MISS);
+    assert(ev.source_id == j_ovb);
+    assert(ev.payload_i32 >= 5000);
+
+    /* 2. Test Delayed dispatch with IN-BUDGET callback:
+     * Register a periodic job with period = 100ms, budget = 10ms. */
     nexus_executive_init(&exec, 100);
     s_delayed_dispatch_ran = false;
     uint16_t j_del = nexus_executive_register_job(&exec, "delayed_disp",
@@ -313,7 +321,7 @@ static void test_executive_scheduling_and_deadline_miss_accounting(void)
                                                   delayed_dispatch_job_fn,
                                                   NULL,
                                                   100, /* 100 ms period */
-                                                  10); /* 10 ms deadline */
+                                                  10); /* 10 ms execution budget */
     assert(j_del > 0);
 
     /* Initial tick at t = 100ms -> dispatched on-time */
@@ -326,14 +334,25 @@ static void test_executive_scheduling_and_deadline_miss_accounting(void)
 
     /* Next run is expected at t = 200ms.
      * Simulate that the executive tick was delayed by 30ms and only fires at t = 230ms!
-     * Dispatch latency is 30ms (30,000 us) which exceeds the 10ms deadline. */
+     * Dispatch latency is 30ms (30,000 us).
+     * Under the corrected timing contract:
+     * - max_dispatch_latency_us is updated to >= 30,000 us.
+     * - Because callback duration is < 10ms (fast callback), deadline_misses MUST REMAIN 0!
+     * - desc_del->deadline_miss_count MUST REMAIN 0! */
     s_delayed_dispatch_ran = false;
     nexus_executive_tick(&exec, 230000LL);
 
     assert(s_delayed_dispatch_ran);
     assert(exec.stats.max_dispatch_latency_us >= 30000);
-    assert(desc_del->deadline_miss_count == 1);
-    assert(exec.stats.deadline_misses == 1);
+    assert(desc_del->deadline_miss_count == 0);
+    assert(exec.stats.deadline_misses == 0);
+
+    /* 3. Normal in-budget periodic execution remains free of false deadline violations */
+    s_delayed_dispatch_ran = false;
+    nexus_executive_tick(&exec, 330000LL);
+    assert(s_delayed_dispatch_ran);
+    assert(desc_del->deadline_miss_count == 0);
+    assert(exec.stats.deadline_misses == 0);
 
     printf("  [PASS] Executive deadline accounting (over-budget callback & delayed dispatch)\n");
 }
@@ -441,6 +460,107 @@ static void test_executive_in_flight_metrics_accounting(void)
     printf("  [PASS] Executive in-flight snapshot accounting & failure invariant\n");
 }
 
+static int s_execution_order[10];
+static int s_execution_order_idx = 0;
+
+static bool order_recorder_job_fn(void *ctx)
+{
+    int id = (int)(intptr_t)ctx;
+    if (s_execution_order_idx < 10) {
+        s_execution_order[s_execution_order_idx++] = id;
+    }
+    return true;
+}
+
+static void test_timing_contract_startup_quantization_and_priority(void)
+{
+    printf("  [TEST] Timing contract: startup phase quantization and priority ordering...\n");
+    nexus_executive_t exec;
+    nexus_executive_init(&exec, 100);
+
+    /* 1. Register the 5 production baseline jobs:
+     * - Heartbeat: Priority Class 0, Period 1000ms, Budget 20ms (ctx = 1)
+     * - LDR:       Priority Class 1, Period 500ms,  Budget 10ms (ctx = 3)
+     * - Mux X0:    Priority Class 1, Period 1000ms, Budget 10ms (ctx = 4)
+     * - DHT11:     Priority Class 1, Period 2000ms, Budget 10ms (ctx = 5)
+     * - Metrics:   Priority Class 2, Period 5000ms, Budget 50ms (ctx = 2) */
+    s_execution_order_idx = 0;
+    uint16_t j_hb  = nexus_executive_register_job(&exec, "heartbeat", NEXUS_PRIORITY_CLASS_0, order_recorder_job_fn, (void *)(intptr_t)1, 1000, 20);
+    uint16_t j_ldr = nexus_executive_register_job(&exec, "ldr",       NEXUS_PRIORITY_CLASS_1, order_recorder_job_fn, (void *)(intptr_t)3, 500,  10);
+    uint16_t j_mux = nexus_executive_register_job(&exec, "mux",       NEXUS_PRIORITY_CLASS_1, order_recorder_job_fn, (void *)(intptr_t)4, 1000, 10);
+    uint16_t j_dht = nexus_executive_register_job(&exec, "dht",       NEXUS_PRIORITY_CLASS_1, order_recorder_job_fn, (void *)(intptr_t)5, 2000, 10);
+    uint16_t j_met = nexus_executive_register_job(&exec, "metrics",   NEXUS_PRIORITY_CLASS_2, order_recorder_job_fn, (void *)(intptr_t)2, 5000, 50);
+
+    assert(j_hb > 0 && j_ldr > 0 && j_mux > 0 && j_dht > 0 && j_met > 0);
+
+    /* Cold boot Tick 1 at T0 = 87,000 us (87 ms) */
+    nexus_executive_tick(&exec, 87000LL);
+
+    /* Verify all 5 jobs dispatched and completed without deadline misses */
+    assert(exec.stats.jobs_dispatched == 5);
+    assert(exec.stats.jobs_completed == 5);
+    assert(exec.stats.deadline_misses == 0);
+
+    /* Verify priority dispatch order:
+     * Priority Class 0 (Heartbeat = 1) must run first.
+     * Priority Class 1 (LDR = 3, MUX = 4, DHT = 5) must run next in FIFO registration order.
+     * Priority Class 2 (Metrics = 2) must run last. */
+    assert(s_execution_order_idx == 5);
+    assert(s_execution_order[0] == 1); /* P0: heartbeat */
+    assert(s_execution_order[1] == 3); /* P1: ldr */
+    assert(s_execution_order[2] == 4); /* P1: mux */
+    assert(s_execution_order[3] == 5); /* P1: dht */
+    assert(s_execution_order[4] == 2); /* P2: metrics */
+
+    /* 2. Simulate hardware startup timeline cycle-by-cycle:
+     * Executive task wakes every 100ms on the FreeRTOS grid: 180ms, 280ms, 380ms, 480ms, 580ms.
+     * None of the 5 periodic jobs are due yet (LDR nominal release is 87 + 500 = 587 ms).
+     * Verify no jobs run prematurely during these intermediate ticks. */
+    for (int64_t t = 180000LL; t <= 580000LL; t += 100000LL) {
+        nexus_executive_tick(&exec, t);
+        assert(exec.stats.jobs_dispatched == 5);
+        assert(exec.stats.jobs_completed == 5);
+    }
+
+    /* At tick t = 680 ms:
+     * Elapsed since T0 (87 ms) is 593 ms >= 500 ms.
+     * LDR becomes eligible and dispatches with 680 - 587 = 93 ms (93,000 us) latency. */
+    nexus_executive_tick(&exec, 680000LL);
+    assert(exec.stats.jobs_dispatched == 6);
+    assert(exec.stats.jobs_completed == 6);
+    assert(exec.stats.deadline_misses == 0);
+    assert(exec.stats.max_dispatch_latency_us == 93000);
+
+    /* Advance intermediate ticks 780ms, 880ms, 980ms, 1080ms:
+     * At 1080 ms, elapsed since T0 is 993 ms < 1000 ms.
+     * Neither Heartbeat nor Mux X0 is eligible yet! */
+    for (int64_t t = 780000LL; t <= 1080000LL; t += 100000LL) {
+        nexus_executive_tick(&exec, t);
+        assert(exec.stats.jobs_dispatched == 6);
+    }
+
+    /* At tick t = 1180 ms:
+     * - LDR: last run at 680 ms. 1180 - 680 = 500 ms >= 500 ms (Eligible, 0 latency!)
+     * - Heartbeat: 1180 - 87 = 1093 ms >= 1000 ms (Eligible, 93 ms latency)
+     * - Mux X0: 1180 - 87 = 1093 ms >= 1000 ms (Eligible, 93 ms latency)
+     * All 3 jobs dispatch in exact priority order (Heartbeat P0, LDR P1, Mux X0 P1). */
+    nexus_executive_tick(&exec, 1180000LL);
+    assert(exec.stats.jobs_dispatched == 9);
+    assert(exec.stats.jobs_completed == 9);
+    assert(exec.stats.deadline_misses == 0);
+
+    /* Advance to 5400 ms tick-by-tick (100ms steps):
+     * - DHT11 dispatches at 2180 ms (2180 - 87 = 2093 >= 2000 ms)
+     * - Metrics dispatches at 5180 ms (5180 - 87 = 5093 >= 5000 ms)
+     * - Periodic jobs continue running on their 100ms-aligned grid with zero false deadline misses. */
+    for (int64_t t = 1280000LL; t <= 5400000LL; t += 100000LL) {
+        nexus_executive_tick(&exec, t);
+        assert(exec.stats.deadline_misses == 0);
+    }
+
+    printf("  [PASS] Timing contract: startup phase quantization and priority ordering\n");
+}
+
 int main(void)
 {
     printf("====================================================\n");
@@ -455,6 +575,7 @@ int main(void)
     test_sensors_executive_integration();
     test_executive_scheduling_and_deadline_miss_accounting();
     test_executive_in_flight_metrics_accounting();
+    test_timing_contract_startup_quantization_and_priority();
 
     printf("====================================================\n");
     printf("ALL MILESTONE 3 HOST UNIT TESTS PASSED SUCCESSFULLY!\n");

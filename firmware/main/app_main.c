@@ -47,7 +47,8 @@ static bool job_executive_metrics(void *user_ctx)
 
     ESP_LOGI(TAG, "exec_stats: ticks=%" PRIu32 " dispatched=%" PRIu32 " completed=%" PRIu32
                   " failed=%" PRIu32 " dline_misses=%" PRIu32 " q_overflows=%" PRIu32
-                  " ready_hwm=%" PRIu16 " ev_hwm=%" PRIu16,
+                  " ready_hwm=%" PRIu16 " ev_hwm=%" PRIu16
+                  " max_lat_us=%" PRIu32 " max_dur_us=%" PRIu32,
              exec->stats.ticks,
              exec->stats.jobs_dispatched,
              exec->stats.jobs_completed,
@@ -55,7 +56,9 @@ static bool job_executive_metrics(void *user_ctx)
              exec->stats.deadline_misses,
              exec->stats.queue_overflows,
              exec->ready_queue.high_water_mark,
-             exec->event_queue.high_water_mark);
+             exec->event_queue.high_water_mark,
+             exec->stats.max_dispatch_latency_us,
+             exec->stats.max_job_duration_us);
 
     for (uint16_t i = 0; i < s_sensor_registry.count; i++) {
         nexus_sensor_descriptor_t *s = nexus_sensor_get_by_index(&s_sensor_registry, i);

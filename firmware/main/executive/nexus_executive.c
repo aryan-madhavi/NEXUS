@@ -187,25 +187,22 @@ void nexus_executive_tick(nexus_executive_t *exec, int64_t current_time_us)
                                        (int32_t)job->failure_count);
         }
 
-        /* Check deadline violation:
-         * A deadline is missed if:
-         * 1) Delayed dispatch: dispatch latency alone exceeded the job deadline budget, OR
-         * 2) Over-budget callback: the execution duration exceeded the job deadline budget, OR
-         * 3) Total turnaround (dispatch latency + duration) exceeded the job deadline budget.
+        /* Check execution budget violation:
+         * A deadline miss is recorded if and only if the measured callback duration
+         * exceeds the configured maximum permitted execution budget (deadline_ms).
+         * Dispatch latency is preserved as an independent scheduling metric and
+         * tracked in exec->stats.max_dispatch_latency_us.
          */
         if (job->deadline_ms > 0) {
-            uint32_t deadline_us = job->deadline_ms * 1000U;
-            if (duration_us > deadline_us || dispatch_latency_us > deadline_us ||
-                (dispatch_latency_us + duration_us) > deadline_us) {
+            uint32_t budget_us = job->deadline_ms * 1000U;
+            if (duration_us > budget_us) {
                 job->deadline_miss_count++;
                 exec->stats.deadline_misses++;
-                uint32_t miss_metric_us = (duration_us > deadline_us) ?
-                                          duration_us : (dispatch_latency_us + duration_us);
                 nexus_executive_emit_event(exec,
                                            NEXUS_EVENT_TYPE_DEADLINE_MISS,
                                            NEXUS_SEVERITY_WARN,
                                            job->job_id,
-                                           (int32_t)miss_metric_us);
+                                           (int32_t)duration_us);
             }
         }
     }
