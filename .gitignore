@@ -3,6 +3,7 @@ build/
 cmake-build-*/
 out/
 dist/
+tests/test_*_host
 
 # ESP-IDF generated files
 firmware/build/
