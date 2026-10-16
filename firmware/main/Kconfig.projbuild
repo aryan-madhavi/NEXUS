@@ -1,0 +1,49 @@
+menu "NEXUS Connection Configuration"
+
+    config NEXUS_WIFI_SSID
+        string "Wi-Fi SSID"
+        default ""
+        help
+            SSID of the 2.4 GHz Wi-Fi Access Point.
+            Leave empty ("") to disable Wi-Fi/MQTT and operate exclusively in USB serial mode.
+
+    config NEXUS_WIFI_PASSWORD
+        string "Wi-Fi Password"
+        default ""
+        help
+            WPA/WPA2 passphrase for the Wi-Fi Access Point.
+            Leave empty if unconfigured or open network.
+
+    config NEXUS_MQTT_BROKER_URI
+        string "MQTT Broker URI"
+        default "mqtt://localhost:1883"
+        help
+            URI of the MQTT broker, e.g. mqtt://192.168.1.50:1883.
+
+    config NEXUS_MQTT_CLIENT_ID
+        string "MQTT Client ID"
+        default "nexus_esp32"
+        help
+            MQTT client identifier string.
+
+    config NEXUS_MQTT_TOPIC_PREFIX
+        string "MQTT Topic Prefix"
+        default "nexus/nexus_esp32"
+        help
+            MQTT topic namespace prefix (e.g. nexus/nexus_esp32).
+            Telemetry will be published to <prefix>/telemetry,
+            and commands received on <prefix>/cmd.
+
+    config NEXUS_RECONNECT_BASE_MS
+        int "Wi-Fi Reconnect Base Delay (ms)"
+        default 1000
+        help
+            Initial backoff duration in milliseconds before first reconnect attempt.
+
+    config NEXUS_RECONNECT_MAX_MS
+        int "Wi-Fi Reconnect Maximum Delay (ms)"
+        default 60000
+        help
+            Maximum backoff ceiling in milliseconds for exponential reconnect delay.
+
+endmenu

@@ -12,9 +12,25 @@ idf_component_register(
         "sensors/nexus_cd4051.c"
         "sensors/nexus_dht11.c"
         "sensors/nexus_sensors.c"
+        "transports/nexus_transport.c"
+        "transports/nexus_envelope.c"
+        "transports/nexus_serial_transport.c"
+        "transports/nexus_wifi_mqtt_transport.c"
+        "transports/nexus_connection_manager.c"
     INCLUDE_DIRS
         "."
         "data_structures"
         "executive"
         "sensors"
+        "transports"
+    REQUIRES
+        esp_wifi
+        nvs_flash
+        esp_event
+        esp_driver_uart
+        esp_netif
+        esp_app_format
+        esp_timer
+        esp_driver_gpio
+        esp_adc
 )

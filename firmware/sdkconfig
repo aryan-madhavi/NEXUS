@@ -706,6 +706,25 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# NEXUS Connection Configuration
+#
+# default:
+CONFIG_NEXUS_WIFI_SSID=""
+# default:
+CONFIG_NEXUS_WIFI_PASSWORD=""
+# default:
+CONFIG_NEXUS_MQTT_BROKER_URI="mqtt://localhost:1883"
+# default:
+CONFIG_NEXUS_MQTT_CLIENT_ID="nexus_esp32"
+# default:
+CONFIG_NEXUS_MQTT_TOPIC_PREFIX="nexus/nexus_esp32"
+# default:
+CONFIG_NEXUS_RECONNECT_BASE_MS=1000
+# default:
+CONFIG_NEXUS_RECONNECT_MAX_MS=60000
+# end of NEXUS Connection Configuration
+
+#
 # Compiler options
 #
 # default:
@@ -3235,6 +3254,33 @@ CONFIG_WL_SECTOR_SIZE_4096=y
 # default:
 CONFIG_WL_SECTOR_SIZE=4096
 # end of Wear Levelling
+
+#
+# ESP-MQTT Configurations
+#
+# default:
+CONFIG_MQTT_PROTOCOL_311=y
+# default:
+# CONFIG_MQTT_PROTOCOL_5 is not set
+# default:
+CONFIG_MQTT_TRANSPORT_SSL=y
+# default:
+CONFIG_MQTT_TRANSPORT_WEBSOCKET=y
+# default:
+CONFIG_MQTT_TRANSPORT_WEBSOCKET_SECURE=y
+# default:
+# CONFIG_MQTT_MSG_ID_INCREMENTAL is not set
+# default:
+# CONFIG_MQTT_SKIP_PUBLISH_IF_DISCONNECTED is not set
+# default:
+# CONFIG_MQTT_REPORT_DELETED_MESSAGES is not set
+# default:
+# CONFIG_MQTT_USE_CUSTOM_CONFIG is not set
+# default:
+# CONFIG_MQTT_TASK_CORE_SELECTION_ENABLED is not set
+# default:
+# CONFIG_MQTT_CUSTOM_OUTBOX is not set
+# end of ESP-MQTT Configurations
 # end of Component config
 
 # default:

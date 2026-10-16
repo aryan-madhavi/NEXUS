@@ -30,7 +30,7 @@ timeline
     2026-10-16 : Milestone 3.1 : Decoupled dispatch latency from execution budget
                : 70-second cold-boot hardware validation baseline
                : Milestone 4 : Unified Connection Manager, Protocol v1 Envelopes, Dual-Link Transports
-               : Milestone 4 Source Correctness Audit (Parser & Dedup Remediation Identified)
+               : Milestone 4 Remediation : Fixed F-01..F-06; 10/10 host tests (ASan/UBSan), ESP-IDF build clean
 ```
 
 ---
@@ -86,15 +86,24 @@ timeline
 - **Architectural Shift**:
   - Designed the **Unified Connection Manager** (`nexus_conn_mgr_t`) abstracting physical transports behind a virtual method table (`nexus_transport_ops_t`).
   - Standardized **Protocol v1 Envelopes** using 256-byte newline-delimited JSON (`\n`) for `hb`, `telem`, `status`, and `event`.
-  - Implemented an asynchronous background FreeRTOS task (`nexus_conn`, Priority 2) draining a static 16-entry transmit ring queue, achieving sub-microsecond non-blocking enqueue times in executive callbacks ($62\text{–}89\text{ ns}$ on host, $< 3\ \mu\text{s}$ on ESP32).
+  - Implemented an asynchronous background FreeRTOS task (`nexus_conn`, Priority 2) draining a static 16-entry transmit ring queue, achieving non-blocking enqueue times in executive callbacks (measured at 89 ns on Linux x86_64 host without sanitizers, 583 ns under ASan; $< 3\ \mu\text{s}$ on 240 MHz ESP32 is an analytical instruction-budget estimate pending target trace verification).
   - Integrated routing policies (`AUTO` with transparent serial fallback, `SERIAL_ONLY`, `MQTT_ONLY`, `BROADCAST`) and a 32-entry sliding sequence deduplication filter.
-- **Pre-Hardware Correctness Audit**: Verified all host unit tests and ESP-IDF compilation, but conducted a rigorous source audit that identified two concrete defects (F-01: parser unbounded string search; F-02: deduplication collision across senders) that must be remediated prior to physical hardware flashing.
+- **Pre-Hardware Audit & Remediation Outcome**:
+  - Conducted a comprehensive pre-hardware correctness audit identifying six findings (F-01 through F-06).
+  - Remediated all findings:
+    - **F-01 (Bounded Envelope Parsing)**: Replaced unbounded string scanning with strict length validation ($\text{len} < 256$), bounded stack copy with guaranteed NUL termination, and digit-validated `strtoul` parsing. Output structures are never partially mutated on malformed frames.
+    - **F-02 (Composite Deduplication Identity)**: Replaced scalar sequence matching with composite `(source, dev, seq)` identity, preventing independent commands from different interfaces or devices from being falsely dropped.
+    - **F-03 (Thread-Safe State & Stats)**: Guarded concurrent transport state transitions and multi-field statistics snapshots using ESP-IDF classic dual-core spinlocks (`portMUX_TYPE`), preventing lost counter increments and torn reads without blocking FreeRTOS event loops.
+    - **F-04 (Wi-Fi Reconnect Backoff)**: Eliminated rapid reconnection loops by implementing geometric backoff ($1\text{ s} \to 2\text{ s} \dots 60\text{ s}$ ceiling) scheduled via an asynchronous one-shot `esp_timer`.
+    - **F-05 (Wi-Fi/MQTT Configuration)**: Created `Kconfig.projbuild` with safe unconfigured defaults (`SSID=""`), keeping credentials out of Git while allowing seamless USB serial fallback out of the box.
+    - **F-06 (Wi-Fi/MQTT & Worker Task Lifecycle Cleanup)**: Retained event-handler instance handles, unregistering them on `stop()` and stopping reconnect timers to prevent stale callback dereferences. Resolved worker-task lifecycle race by implementing FreeRTOS task exit semaphore rendezvous (`task_exit_sem` with 500 ms bounded timeout and retry semantics) and immediate unblocking (`xTaskNotifyGive`) in `nexus_conn_mgr_stop()`. Removed unsafe asynchronous `vTaskDelete(th)`. Rejected worker self-stop, added early queue breakout on stop in `process_tx_queue`, and ensured clean rollback of started transports on `xTaskCreate` failure.
+  - Verified with 11/11 host unit tests, Clang AddressSanitizer and UndefinedBehaviorSanitizer (100% clean), and native ESP-IDF v6.0.1 compilation (0 warnings, 0 errors, 886 KB binary, SHA-256 `f5b5f476...`).
 
 ---
 
 ## 3. Cross-Cutting Design Principles
 
-The technical consistency of the NEXUS codebase is governed by four core architectural principles:
+The technical consistency of the NEXUS codebase is governed by five core architectural principles:
 
 ### 1. Zero Runtime Dynamic Allocation
 All queues, descriptors, sample buffers, envelopes, and state contexts are allocated as static globals or pre-sized arrays at startup. Once `app_main` initializes, zero calls to `malloc`, `calloc`, or `pvPortMalloc` occur in the steady-state runtime loop, eliminating heap fragmentation and out-of-memory crashes.
@@ -107,7 +116,10 @@ The system is divided into two distinct execution tiers:
 ### 3. Hardware Conflict Preemption
 On the classic ESP32, shared silicon peripherals (such as ADC2 being shared with the Wi-Fi SAR controller) represent fatal failure modes if not designed out early. NEXUS resolved this by permanently binding all analog sensors to ADC1, ensuring seamless coexistence with Wi-Fi and Bluetooth.
 
-### 4. Mathematical Invariants & Observable Telemetry
+### 4. Memory-Safe Wire-Format Parsing
+Incoming byte streams from serial lines or network sockets are treated as untrusted. Bounded stack scratch buffers of fixed protocol ceiling size (`scratch[256]`) enforce guaranteed NUL termination before any token scanning, preventing memory overreads, page faults, or buffer overflow vulnerabilities.
+
+### 5. Mathematical Invariants & Observable Telemetry
 Internal state is exposed continuously through deterministic telemetry frames. System health is audited using provable invariants, such as:
 $$\text{dispatched} = \text{completed} + \text{failed} + \text{in\_flight}$$
 $$\text{heap\_free}(t) \to \text{constant}$$
@@ -127,6 +139,6 @@ $$\text{deadline\_misses} \equiv 0 \quad (\forall \tau_{\text{callback}} \le \te
 | **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) |
 | **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) |
 | **Transmit Queue** | None | None | None | None | 16 slots (Static ring) |
-| **Ingress Dedup** | None | None | None | None | 32-entry sliding window |
-| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 7/7 passed |
-| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | Pending audit remediation |
+| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` |
+| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed (ASan/UBSan clean) |
+| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | Pending hardware flash authorization |
