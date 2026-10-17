@@ -4,6 +4,7 @@ cmake-build-*/
 out/
 dist/
 tests/test_*_host
+tests/test_*_host_san
 
 # ESP-IDF generated files
 firmware/build/
@@ -57,6 +58,7 @@ Thumbs.db
 # Logs and temporary files
 *.log
 !docs/validation/*.log
+docs/validation/soak_mqtt_err_*.log
 tmp/
 temp/
 
