@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "serial_path": "docs/validation/soak_hardware_30min_serial.log",
+    "mqtt_path": "docs/validation/soak_hardware_30min_mqtt.log",
+    "schema_version": "1.1.0"
+  },
+  "overall_verdict": "FAIL",
+  "summary": {
+    "overall_verdict": "FAIL",
+    "firm_requirements": {
+      "total": 7,
+      "passed": 5,
+      "failed": 1,
+      "inconclusive": 1
+    },
+    "proposed_criteria": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "inconclusive": 0
+    }
+  },
+  "criteria": {
+    "1_system_stability": {
+      "classification": "Firm Requirement",
+      "verdict": "INCONCLUSIVE",
+      "message": "No boot record (reset_reason=1) observed in log"
+    },
+    "2_executive_deadlines": {
+      "classification": "Firm Requirement",
+      "verdict": "PASS",
+      "message": "dline_misses == 0 across all 359 periodic reports"
+    },
+    "3_executive_queues": {
+      "classification": "Firm Requirement",
+      "verdict": "PASS",
+      "message": "q_overflows == 0 across all 359 periodic reports"
+    },
+    "4_callback_budget": {
+      "classification": "Firm Requirement",
+      "verdict": "PASS",
+      "message": "Peak callback duration 29892 us strictly within 50000 us budget"
+    },
+    "5_dispatch_latency": {
+      "classification": "Proposed Criterion",
+      "verdict": "PASS",
+      "message": "Peak dispatch latency 101721 us bounded by startup quantization allowance"
+    },
+    "6_transport_queuing": {
+      "classification": "Firm Requirement",
+      "verdict": "FAIL",
+      "message": "Transport failures detected: tx_drop=2, tx_fail=0"
+    },
+    "7_schema_integrity": {
+      "classification": "Firm Requirement",
+      "verdict": "PASS",
+      "message": "100% schema compliance across 888 envelopes; zero fabricated readings"
+    },
+    "8_heap_stability": {
+      "classification": "Firm Requirement",
+      "verdict": "PASS",
+      "message": "Steady-state heap stable: trend=72.9 B/hr (Net=+224B, Spread=3620B, N=1746, R2=0.00)"
+    },
+    "9_telemetry_validity": {
+      "classification": "Proposed Criterion",
+      "verdict": "PASS",
+      "message": "788/888 valid envelopes (88.74% >= 85.0% target)"
+    },
+    "10_error_isolation": {
+      "classification": "Proposed Criterion",
+      "verdict": "PASS",
+      "message": "Max consecutive invalid envelopes = 2 <= 3"
+    },
+    "11_queue_hwm": {
+      "classification": "Proposed Criterion",
+      "verdict": "PASS",
+      "message": "Peak queue depth 2/16 within proposed limit of 4"
+    },
+    "12_physical_driver": {
+      "classification": "Proposed Criterion",
+      "verdict": "PASS",
+      "message": "Physical driver attempts: 769/868 OK (88.59% >= 80.0%) across [526365..2285665] ms"
+    }
+  },
+  "sequence_metrics": {
+    "total_envelopes": 2993,
+    "seq_first": 852,
+    "seq_last": 3845,
+    "duplicate_count": 0,
+    "out_of_order_count": 0,
+    "unobserved_mqtt_count": 1,
+    "implausible_jumps": []
+  },
+  "telemetry_metrics": {
+    "type_breakdown": {
+      "hb": 1746,
+      "telem": 888,
+      "status": 359
+    },
+    "valid_count": 788,
+    "degraded_count": 100,
+    "missing_valid_key": 0,
+    "malformed_valid_key": 0,
+    "invalid_field_types": 0,
+    "fabricated_readings": 0,
+    "max_consecutive_invalids": 2
+  },
+  "serial_metrics": {
+    "exec_snapshots_count": 359,
+    "conn_snapshots_count": 358,
+    "driver_snapshots_count": 80,
+    "heap_samples_count": 1746,
+    "reset_reasons": []
+  }
+}

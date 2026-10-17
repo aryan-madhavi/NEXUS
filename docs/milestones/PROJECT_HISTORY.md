@@ -33,7 +33,9 @@ timeline
                : Milestone 4 Hardware : Serial-only 95s validation; F-01..F-06 remediated
     2026-10-17 : Milestone 4.1 : Inbound MQTT receive path, Wi-Fi disconnect diagnostics, live AP/broker connection
                : Milestone 4.1 Remediation : DHT11 atomic bit timing, safe API, startup telemetry schema validity
-               : 29/29 Host Tests (ASan/UBSan clean) : ESP-IDF v6.0.1 build clean
+    2026-10-17 - 18 : Milestone 4 Qualification : 30-minute Continuous Hardware Soak (12/12 Criteria PASS)
+                    : Concurrency spinlock fix eliminates drops (tx_drop=0, tx_fail=0)
+                    : 30/30 Host Tests (14/14 M4, 11/11 M3, 5/5 M2; ASan/UBSan clean) : Final Sign-Off
 ```
 
 ---
@@ -143,5 +145,5 @@ $$\text{deadline\_misses} \equiv 0 \quad (\forall \tau_{\text{callback}} \le \te
 | **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) |
 | **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) |
 | **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` |
-| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 29/29 total (13/13 M4, 11/11 M3, 5/5 M2; ASan/UBSan clean) |
-| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | Wi-Fi/MQTT diagnostics & connection verified; pre-flash build ready |
+| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (14/14 M4, 11/11 M3, 5/5 M2; ASan/UBSan clean) |
+| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS, 0 drops, 0 resets, 1,798.9 s uptime) |

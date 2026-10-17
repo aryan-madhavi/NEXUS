@@ -3,6 +3,8 @@
 #include <string.h>
 #include <time.h>
 #include <inttypes.h>
+#include <pthread.h>
+#include <stdatomic.h>
 
 #include "transports/nexus_transport.h"
 #include "transports/nexus_envelope.h"
@@ -1096,6 +1098,132 @@ static void test_telemetry_schema_and_dht_validity(void)
     printf("  [PASS] Telemetry schema compatibility: omitted temp/hum vs valid dht11\n");
 }
 
+typedef struct {
+    nexus_conn_mgr_t *mgr;
+    atomic_bool stop_consumer;
+    int items_to_produce;
+    int items_produced;
+} concurrent_test_ctx_t;
+
+static void *concurrent_consumer_worker(void *arg)
+{
+    concurrent_test_ctx_t *ctx = (concurrent_test_ctx_t *)arg;
+    while (!atomic_load(&ctx->stop_consumer)) {
+        size_t n = nexus_conn_mgr_process_tx_queue(ctx->mgr);
+        if (n > 0) {
+            nexus_serial_transport_mock_reset(&ctx->mgr->serial_transport);
+        }
+        struct timespec ts = {.tv_sec = 0, .tv_nsec = 10000}; /* 10 us */
+        nanosleep(&ts, NULL);
+    }
+    /* Drain any remaining items */
+    nexus_conn_mgr_process_tx_queue(ctx->mgr);
+    nexus_serial_transport_mock_reset(&ctx->mgr->serial_transport);
+    return NULL;
+}
+
+static void *concurrent_producer_worker(void *arg)
+{
+    concurrent_test_ctx_t *ctx = (concurrent_test_ctx_t *)arg;
+    nexus_envelope_t env;
+    nexus_envelope_init(&env);
+
+    for (int i = 0; i < ctx->items_to_produce; i++) {
+        assert(nexus_envelope_format_heartbeat(&env, (uint32_t)(i + 1), 1000 + i, 200000, (uint32_t)i));
+        /* Producer simulates periodic executive callback enqueues under concurrent worker activity.
+         * Under the critical section, lock contention never causes a spurious drop. */
+        bool enqueued = nexus_conn_mgr_enqueue(ctx->mgr, &env, NEXUS_ROUTE_AUTO);
+        assert(enqueued);
+        ctx->items_produced++;
+        struct timespec ts = {.tv_sec = 0, .tv_nsec = 50000}; /* 50 us */
+        nanosleep(&ts, NULL);
+    }
+    return NULL;
+}
+
+static void test_tx_queue_concurrency_and_contention_safety(void)
+{
+    printf("  [TEST] Concurrency and contention safety: multi-threaded producer/consumer & drop invariant...\n");
+
+    nexus_conn_mgr_t mgr;
+    assert(nexus_conn_mgr_init(&mgr, NULL));
+    assert(nexus_conn_mgr_start(&mgr));
+
+    /* 1. Multi-threaded stress test: 200 envelopes enqueued and drained concurrently */
+    concurrent_test_ctx_t ctx = {
+        .mgr = &mgr,
+        .stop_consumer = false,
+        .items_to_produce = 200,
+        .items_produced = 0
+    };
+
+    pthread_t consumer_thread, producer_thread;
+    assert(pthread_create(&consumer_thread, NULL, concurrent_consumer_worker, &ctx) == 0);
+    assert(pthread_create(&producer_thread, NULL, concurrent_producer_worker, &ctx) == 0);
+
+    /* Wait for producer to finish producing all items */
+    assert(pthread_join(producer_thread, NULL) == 0);
+    assert(ctx.items_produced == 200);
+
+    /* Let consumer drain remaining items */
+    struct timespec drain_sleep = {.tv_sec = 0, .tv_nsec = 10000000}; /* 10 ms */
+    nanosleep(&drain_sleep, NULL);
+    atomic_store(&ctx.stop_consumer, true);
+    assert(pthread_join(consumer_thread, NULL) == 0);
+
+    /* Final drain */
+    nexus_conn_mgr_process_tx_queue(&mgr);
+
+    nexus_conn_mgr_stats_t cstats;
+    nexus_conn_mgr_get_stats(&mgr, &cstats);
+
+    /* Invariant: zero dropped envelopes during concurrent interleaved execution when queue has space */
+    assert(cstats.tx_enqueued == 200);
+    assert(cstats.tx_dispatched == 200);
+    assert(cstats.tx_dropped == 0);
+    assert(cstats.tx_failed == 0);
+    assert(cstats.tx_queue_depth == 0);
+
+    /* 2. Strict queue saturation invariant: total_dropped increments ONLY on true capacity exhaustion */
+    nexus_envelope_t env;
+    nexus_envelope_init(&env);
+    assert(nexus_envelope_format_heartbeat(&env, 9999, 50000, 190000, 500));
+
+    /* Fill all 16 slots without consumer running */
+    for (uint16_t i = 0; i < NEXUS_CONN_TX_QUEUE_CAPACITY; i++) {
+        assert(nexus_conn_mgr_enqueue(&mgr, &env, NEXUS_ROUTE_AUTO));
+    }
+    nexus_conn_mgr_get_stats(&mgr, &cstats);
+    assert(cstats.tx_queue_depth == NEXUS_CONN_TX_QUEUE_CAPACITY);
+    assert(cstats.tx_dropped == 0);
+
+    /* 17th item must be rejected and increment tx_dropped */
+    assert(!nexus_conn_mgr_enqueue(&mgr, &env, NEXUS_ROUTE_AUTO));
+    nexus_conn_mgr_get_stats(&mgr, &cstats);
+    assert(cstats.tx_dropped == 1);
+
+    /* 18th item must also be rejected and increment tx_dropped */
+    assert(!nexus_conn_mgr_enqueue(&mgr, &env, NEXUS_ROUTE_AUTO));
+    nexus_conn_mgr_get_stats(&mgr, &cstats);
+    assert(cstats.tx_dropped == 2);
+
+    /* Drain queue */
+    assert(nexus_conn_mgr_process_tx_queue(&mgr) == NEXUS_CONN_TX_QUEUE_CAPACITY);
+    nexus_conn_mgr_get_stats(&mgr, &cstats);
+    assert(cstats.tx_queue_depth == 0);
+    assert(cstats.tx_dropped == 2);
+
+    /* Enqueue now succeeds */
+    assert(nexus_conn_mgr_enqueue(&mgr, &env, NEXUS_ROUTE_AUTO));
+    nexus_conn_mgr_get_stats(&mgr, &cstats);
+    assert(cstats.tx_queue_depth == 1);
+    assert(cstats.tx_dropped == 2);
+
+    /* Clean stop */
+    assert(nexus_conn_mgr_stop(&mgr));
+    printf("  [PASS] Concurrency and contention safety: multi-threaded producer/consumer & drop invariant\n");
+}
+
 int main(void)
 {
     printf("====================================================\n");
@@ -1115,6 +1243,7 @@ int main(void)
     test_executive_and_sensors_integration();
     test_mqtt_inbound_rx_and_fragmentation();
     test_telemetry_schema_and_dht_validity();
+    test_tx_queue_concurrency_and_contention_safety();
 
     printf("====================================================\n");
     printf("ALL MILESTONE 4 HOST UNIT TESTS PASSED SUCCESSFULLY!\n");

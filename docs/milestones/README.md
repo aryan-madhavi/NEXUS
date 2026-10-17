@@ -14,7 +14,7 @@ This directory contains the sequential, fully documented technical records of ev
 | **M2** | [**MILESTONE_2.md**](MILESTONE_2.md) | Executive Core & Bounded Data Structures | **ACCEPTED** | Host Unit Tests + 65s Physical Serial Log | `0666a9f` |
 | **M3** | [**MILESTONE_3.md**](MILESTONE_3.md) | Sensor Subsystem, Sensor Registry & Initial Active Drivers | **ACCEPTED** (with timing audit) | Host Unit Tests + 65s Physical Telemetry | `0bd6fb2` |
 | **M3.1** | [**MILESTONE_3_1.md**](MILESTONE_3_1.md) | Executive Timing-Contract Correction & Hardware Baseline | **ACCEPTED** | Host Regression Tests + 70s Physical Telemetry | `9738535`, `17cea82`, [`milestone3_1_validation_report.md`](../validation/milestone3_1_validation_report.md) |
-| **M4** | [**MILESTONE_4.md**](MILESTONE_4.md) | Unified Connection Manager, Protocol v1 Envelopes & Audit | **REMEDIATED & VERIFIED** | Host Unit Tests (10/10, ASan/UBSan) + ESP-IDF Clean Build | Working tree, [`MILESTONE4_CONNECTION_MANAGER.md`](../MILESTONE4_CONNECTION_MANAGER.md), `tests/test_milestone4_host.c` |
+| **M4** | [**MILESTONE_4.md**](MILESTONE_4.md) | Unified Connection Manager, Protocol v1 Envelopes & Audit | **ACCEPTED & SIGNED OFF** | Physical 30-min Hardware Soak (12/12 Criteria PASS) | `build/nexus.bin` (`4f9850bc...`), [`soak_qualification_run2_report.md`](../validation/soak_qualification_run2_report.md), [`milestone4_validation_report.md`](../validation/milestone4_validation_report.md) |
 | **Hist** | [**PROJECT_HISTORY.md**](PROJECT_HISTORY.md) | Chronological Project History & Architectural Evolution | **CURRENT** | Synthesis of all repository milestones | [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) |
 
 ---
@@ -56,10 +56,12 @@ This directory contains the sequential, fully documented technical records of ev
   - Dedicated background FreeRTOS worker task (`nexus_conn`, Priority 2, 10 ms loop) draining a static 16-slot transmit queue.
   - Routing policies (`AUTO` with transparent serial fallback, `SERIAL_ONLY`, `MQTT_ONLY`, `BROADCAST`) and 32-entry sliding sequence deduplication filter.
   - Remediated all pre-hardware audit findings F-01 through F-06 and the worker task lifecycle race: bounded scratch parser ($\text{len} < 256$), composite deduplication key `(source, dev, seq)`, dual-core spinlocks for telemetry state/stats, geometric Wi-Fi reconnect backoff timer, Kconfig configuration isolation (`Kconfig.projbuild`), event handler cleanup, and safe FreeRTOS task exit semaphore rendezvous (`task_exit_sem` with 500 ms bounded timeout and retry semantics, removal of `vTaskDelete(th)`, worker self-stop rejection, early queue drain breakout, and startup rollback).
-  - Expanded host test suite (`tests/test_milestone4_host.c`): 11/11 test groups passed (100%), verified with Clang AddressSanitizer and UndefinedBehaviorSanitizer (zero errors/leaks).
+  - Resolved transport queue preemption contention via dual-core spinlock critical section `s_conn_mgr_tx_mux` (`taskENTER_CRITICAL` / `taskEXIT_CRITICAL`), bounding duration to $\le 1.8\ \mu\text{s}$ and eliminating preemption drops.
+  - Expanded host test suite (`tests/test_milestone4_host.c`): 14/14 test groups passed (100%), verified with Clang AddressSanitizer and UndefinedBehaviorSanitizer (zero errors/leaks).
 - **Build & Verification Status**:
-  - Native ESP-IDF v6.0.1 builds `nexus.bin` (SHA-256 `f5b5f476...`, 886 KB) with zero warnings and zero errors.
-  - Physical flashing and on-air network verification remain **PENDING** explicit hardware authorization.
+  - Native ESP-IDF v6.0.1 builds `build/nexus.bin` (SHA-256 `4f9850bc466016070cd9554e8c37889f46ec6675d62db323e62feb38ad5c01d3`, 913,552 bytes) with zero warnings and zero errors.
+  - Physical 30-minute continuous hardware soak qualification (**12/12 criteria PASS**, 100%): `tx_drop=0`, `tx_fail=0`, `dline_misses=0`, `q_overflows=0`, 0 resets, monotonic uptime 1,798.9 s, heap leak-free (+199.4 B/hr, $R^2=0.00$), 89.09% valid telemetry, 89.17% physical driver success.
+  - **Milestone 4 is FULLY ACCEPTED AND SIGNED OFF (PASS)**. Cleared to proceed to Milestone 5.
 
 ---
 
@@ -72,8 +74,9 @@ flowchart TD
     M3[Milestone 3: Sensor Registry & Physical Drivers]
     M3_1[Milestone 3.1: Executive Timing-Contract Correction]
     M4[Milestone 4: Unified Connection Manager & Transports]
+    M4_Gate{30-Min Soak Qualification: 12/12 PASS}
     
-    subgraph Future Roadmap
+    subgraph Active & Future Roadmap
         M5[Milestone 5: Ground Station & InfluxDB / Grafana]
         M6[Milestone 6: Bidirectional Command Protocol & Registry]
         M7[Milestone 7: AI / LLM Tool Service Integration]
@@ -83,8 +86,8 @@ flowchart TD
     M2 -->|Deterministic Cyclic Scheduler| M3
     M3 -->|Identified Quantization Defect| M3_1
     M3_1 -->|Guaranteed Timing Isolation Baseline| M4
-    M4 -->|Awaiting Audit Fixes & Flash Auth| M4_Gate{Remediation & Flash Gate}
-    M4_Gate -->|Validated Telemetry Streaming| M5
+    M4 -->|Spinlock Fix & Hardware EN Pulse| M4_Gate
+    M4_Gate -->|Validated Dual-Link Telemetry| M5
     M5 --> M6
     M6 --> M7
 
@@ -92,9 +95,9 @@ flowchart TD
     classDef pending fill:#f57f17,stroke:#bc5100,color:#ffffff;
     classDef future fill:#37474f,stroke:#263238,color:#ffffff;
     
-    class M1,M2,M3,M3_1 done;
-    class M4,M4_Gate pending;
-    class M5,M6,M7 future;
+    class M1,M2,M3,M3_1,M4,M4_Gate done;
+    class M5 pending;
+    class M6,M7 future;
 ```
 
 ---

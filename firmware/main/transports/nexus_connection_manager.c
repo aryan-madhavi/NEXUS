@@ -9,14 +9,26 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 static const char *TAG = "nexus_conn_mgr";
+
+/* Dual-core spinlock protecting bounded TX queue operations and multi-field statistics snapshots */
+static portMUX_TYPE s_conn_mgr_tx_mux = portMUX_INITIALIZER_UNLOCKED;
+#define CONN_MGR_LOCK()    taskENTER_CRITICAL(&s_conn_mgr_tx_mux)
+#define CONN_MGR_UNLOCK()  taskEXIT_CRITICAL(&s_conn_mgr_tx_mux)
+
 #else
 #include <time.h>
+#include <pthread.h>
 static inline int64_t esp_timer_get_time(void)
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ((int64_t)ts.tv_sec * 1000000LL) + ((int64_t)ts.tv_nsec / 1000LL);
 }
+
+/* Host test critical section emulation via pthread mutex */
+static pthread_mutex_t s_host_conn_mgr_mutex = PTHREAD_MUTEX_INITIALIZER;
+#define CONN_MGR_LOCK()    pthread_mutex_lock(&s_host_conn_mgr_mutex)
+#define CONN_MGR_UNLOCK()  pthread_mutex_unlock(&s_host_conn_mgr_mutex)
 #endif
 
 #ifdef ESP_PLATFORM
@@ -38,41 +50,6 @@ static void conn_mgr_task(void *arg)
     vTaskDelete(NULL);
 }
 #endif
-
-static void lock_tx(nexus_conn_mgr_t *mgr)
-{
-#ifdef ESP_PLATFORM
-    if (mgr && mgr->tx_mutex) {
-        xSemaphoreTake((SemaphoreHandle_t)mgr->tx_mutex, portMAX_DELAY);
-    }
-#else
-    (void)mgr;
-#endif
-}
-
-static bool try_lock_tx(nexus_conn_mgr_t *mgr)
-{
-#ifdef ESP_PLATFORM
-    if (mgr && mgr->tx_mutex) {
-        return (xSemaphoreTake((SemaphoreHandle_t)mgr->tx_mutex, 0) == pdTRUE);
-    }
-    return true;
-#else
-    (void)mgr;
-    return true;
-#endif
-}
-
-static void unlock_tx(nexus_conn_mgr_t *mgr)
-{
-#ifdef ESP_PLATFORM
-    if (mgr && mgr->tx_mutex) {
-        xSemaphoreGive((SemaphoreHandle_t)mgr->tx_mutex);
-    }
-#else
-    (void)mgr;
-#endif
-}
 
 static bool conn_mgr_mqtt_rx_trampoline(void *user_ctx, const uint8_t *data, size_t len)
 {
@@ -106,14 +83,8 @@ bool nexus_conn_mgr_init(nexus_conn_mgr_t *mgr, const nexus_conn_mgr_config_t *c
     nexus_wifi_mqtt_transport_set_rx_handler(&mgr->mqtt_transport, conn_mgr_mqtt_rx_trampoline, mgr);
 
 #ifdef ESP_PLATFORM
-    mgr->tx_mutex = xSemaphoreCreateMutex();
-    if (!mgr->tx_mutex) {
-        return false;
-    }
     mgr->task_exit_sem = xSemaphoreCreateBinary();
     if (!mgr->task_exit_sem) {
-        vSemaphoreDelete((SemaphoreHandle_t)mgr->tx_mutex);
-        mgr->tx_mutex = NULL;
         return false;
     }
 #else
@@ -281,15 +252,14 @@ bool nexus_conn_mgr_enqueue(nexus_conn_mgr_t *mgr,
         return false;
     }
 
-    /* Fast non-blocking lock to guarantee deterministic execution duration for executive callbacks */
-    if (!try_lock_tx(mgr)) {
-        mgr->tx_queue.total_dropped++;
-        return false;
-    }
+    /* Bounded non-preemptible critical section guaranteeing deterministic execution duration (< 1 us)
+     * without blocking, eliminating priority preemption contention drops while respecting the 50 ms
+     * executive callback budget. */
+    CONN_MGR_LOCK();
 
     if (mgr->tx_queue.count >= NEXUS_CONN_TX_QUEUE_CAPACITY) {
         mgr->tx_queue.total_dropped++;
-        unlock_tx(mgr);
+        CONN_MGR_UNLOCK();
         return false;
     }
 
@@ -305,7 +275,7 @@ bool nexus_conn_mgr_enqueue(nexus_conn_mgr_t *mgr,
     }
     mgr->tx_queue.total_enqueued++;
 
-    unlock_tx(mgr);
+    CONN_MGR_UNLOCK();
     return true;
 }
 
@@ -464,25 +434,27 @@ size_t nexus_conn_mgr_process_tx_queue(nexus_conn_mgr_t *mgr)
         nexus_tx_queue_item_t item;
         bool has_item = false;
 
-        lock_tx(mgr);
+        CONN_MGR_LOCK();
         if (mgr->tx_queue.count > 0) {
             memcpy(&item, &mgr->tx_queue.items[mgr->tx_queue.tail], sizeof(nexus_tx_queue_item_t));
             mgr->tx_queue.tail = (mgr->tx_queue.tail + 1U) % NEXUS_CONN_TX_QUEUE_CAPACITY;
             mgr->tx_queue.count--;
             has_item = true;
         }
-        unlock_tx(mgr);
+        CONN_MGR_UNLOCK();
 
         if (!has_item) {
             break;
         }
 
         bool ok = dispatch_item(mgr, &item);
+        CONN_MGR_LOCK();
         if (ok) {
             mgr->tx_queue.total_dispatched++;
         } else {
             mgr->tx_queue.total_failed++;
         }
+        CONN_MGR_UNLOCK();
         processed++;
     }
 
@@ -652,12 +624,16 @@ void nexus_conn_mgr_get_stats(const nexus_conn_mgr_t *mgr, nexus_conn_mgr_stats_
 
     memset(out_stats, 0, sizeof(nexus_conn_mgr_stats_t));
     out_stats->overall_state = mgr->state;
+
+    CONN_MGR_LOCK();
     out_stats->tx_enqueued = mgr->tx_queue.total_enqueued;
     out_stats->tx_dispatched = mgr->tx_queue.total_dispatched;
     out_stats->tx_dropped = mgr->tx_queue.total_dropped;
     out_stats->tx_failed = mgr->tx_queue.total_failed;
     out_stats->tx_queue_depth = mgr->tx_queue.count;
     out_stats->tx_queue_hwm = mgr->tx_queue.high_water_mark;
+    CONN_MGR_UNLOCK();
+
     out_stats->rx_duplicates = mgr->dedup.duplicates_detected;
 
     mgr->serial_transport.ops->get_stats(&mgr->serial_transport, &out_stats->serial_stats);

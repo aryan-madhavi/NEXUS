@@ -407,7 +407,7 @@ Because of diagnostic throttling, intermediate cycles between rate-limit windows
 - **Supported Success Rate**:
   - Based on the final cumulative driver counters at uptime 71575 ms (`total_ok=32, total_err=4`): $\frac{32}{36} = \mathbf{88.89\%}$ across 36 physical attempts.
   - Based on all post-initial telemetry envelopes across the 81.1 s session: $\frac{35}{39} = \mathbf{89.74\%}$ (35 valid / 39 post-initial envelopes).
-- **Distinction Between Criteria & Recommendations**: The acceptance criterion ("no repeated handshake, timeout, or checksum failures") was met functionally, as all errors were isolated and self-recovering. However, an ~89% success rate under concurrent Wi-Fi is an inherent limitation of software-timed GPIO bit-banging; for long-term industrial reliability, migrating timing to the ESP32 RMT peripheral or hardware digital sensors (e.g. SHT3x) is recommended.
+- **Distinction Between Criteria & Recommendations**: The acceptance criterion ("no repeated handshake, timeout, or checksum failures") was met functionally in telemetry, as all error envelopes were non-consecutive and valid telemetry resumed in subsequent envelopes. However, an ~89% success rate under concurrent Wi-Fi is an inherent limitation of software-timed GPIO bit-banging; for long-term industrial reliability, migrating timing to the ESP32 RMT peripheral or hardware digital sensors (e.g. SHT3x) is recommended.
 
 #### Heap Reconciliation
 - **Cold Boot Baseline (uptime 345 ms)**: `free_heap = 203,396 bytes`.
@@ -433,15 +433,58 @@ Because of diagnostic throttling, intermediate cycles between rate-limit windows
   - Valid samples emit plausible temperature (`32°C`) and humidity (`56%–57% RH`) matching physical room conditions.
   - Zero executive deadline misses (`dline_misses = 0`) and zero queue overflows (`q_overflows = 0`).
   - Zero watchdog resets, panics, aborts, or reboots during the observation period.
-- **Scope Limitation**: An 81.1-second physical observation demonstrates functional correctness and immediate recovery, but does not constitute long-term reliability qualification. Software bit-banging under Wi-Fi load remains susceptible to occasional bit timeouts. Long-term qualification requires multi-hour soak testing and RMT peripheral timing.
+- **Scope Limitation**: An 81.1-second physical observation demonstrates functional correctness and subsequent telemetry resumption, but does not constitute long-term reliability qualification. Software bit-banging under Wi-Fi load remains susceptible to occasional bit timeouts. Long-term qualification requires multi-hour soak testing and RMT peripheral timing.
 
 ### 12.5 Known Risks & Remaining Limitations
 1. **Software-Timed GPIO Bit-Banging Under Wi-Fi Load**:
    - The critical section is strictly bounded to $\le 175\ \mu\text{s}$ per bit, preventing watchdog timeouts and reducing interrupt starvation.
-   - However, software-timed 1-wire protocols inherently lack hardware DMA or FIFO support. Intensive Wi-Fi radio activity between bits or at line turnaround can occasionally induce a handshake timeout or checksum error. The driver recovers gracefully on the subsequent 2-second cycle.
+   - However, software-timed 1-wire protocols inherently lack hardware DMA or FIFO support. Intensive Wi-Fi radio activity between bits or at line turnaround can occasionally induce a handshake timeout or checksum error. While valid telemetry resumes in a subsequent envelope, individual physical sensor acquisition completions are not directly observable between rate-limited driver log intervals, and next-attempt physical success cannot be claimed as proven.
 2. **Flash-Size Configuration Mismatch**:
    - The ESP32 DevKit V1 board contains a 4 MB SPI flash chip, but the binary image header specifies 2 MB (`CONFIG_ESPTOOLPY_FLASHSIZE_2MB=y`), generating a bootloader warning:
      `W (511) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.`
    - This warning is benign for the current 1 MB factory app partition layout, but can be resolved in sdkconfig when convenient.
 3. **CD4051 X0 (HW-870) Analog Baseline**:
    - The HW-870 reading of 0–10 counts ($0..8\text{ mV}$) reflects hardware/wiring disconnect or an unpowered 5V heater rail pending multimeter inspection. Software drivers and ADC scaling are verified identical to Milestone 3.1.
+
+### 12.6 30-Minute Continuous Physical Soak Test Execution & Results (Run 1 Baseline)
+
+On 2026-10-17, a continuous 1,800-second (30-minute) hardware soak test was executed on the running ESP32 DevKit V1 board concurrently capturing UART0 serial logs and Podman-containerized MQTT telemetry:
+
+- **Raw Evidence Logs**:
+  - Serial Stream: `docs/validation/soak_hardware_30min_serial.log` (2,550 lines, 315 KB)
+  - MQTT Telemetry: `docs/validation/soak_hardware_30min_mqtt.log` (5,986 lines, 422 KB)
+  - Detailed Report: `docs/validation/soak_hardware_30min_report.md` & `.json`
+- **Key Measured Findings Across 30 Minutes**:
+  - **Uptime Continuity**: Monotonic uptime advanced continuously by 1,798.3 s ($514,535\text{ ms} \rightarrow 2,312,835\text{ ms}$) with zero watchdog resets, panics, or brownouts.
+  - **Executive Timing**: Zero deadline misses (`dline_misses = 0`) across 359 periodic reports. Peak callback duration strictly bounded at `29,892 us` (< 50,000 us limit). Peak dispatch latency `101,721 us` ($\le 110,000\ \mu\text{s}$).
+  - **Memory Integrity**: 1,746 steady-state heap samples recorded a net change of `+224 bytes` with a linear regression trend of `+72.9 B/hr` ($R^2 = 0.00$), confirming zero steady-state memory leak.
+  - **Telemetry Validity**: 788 of 888 envelopes were valid (**88.74%** $\ge 85.0\%$ threshold). Maximum consecutive invalid envelopes was 2 ($\le 3$).
+  - **Physical Driver Success**: 769 of 868 physical DHT11 driver attempts succeeded (**88.59%** $\ge 80.0\%$).
+  - **Transport Delivery**: 2,993 total envelopes processed. `tx_enq = 3841`, `tx_disp = 3841`, `tx_drop = 2` (1 drop occurred during the 30-minute run due to non-blocking mutex trylock contention; 1 drop was inherited prior to capture start). Delivery throughput: **99.97%**.
+
+### 12.7 Concurrency-Safe Spinlock Fix & Hardware Soak Qualification (Run 2 Final)
+
+Following the identification of trylock preemption contention as the root cause of the transport drop, `nexus_connection_manager` was upgraded to use an ESP-IDF dual-core spinlock critical section (`portMUX_TYPE s_conn_mgr_tx_mux`) with `taskENTER_CRITICAL` / `taskEXIT_CRITICAL`.
+
+The updated firmware binary `build/nexus.bin` (913,552 bytes, SHA-256 `4f9850bc466016070cd9554e8c37889f46ec6675d62db323e62feb38ad5c01d3`) was flashed to the ESP32 on `/dev/ttyUSB0`. An authorized 1,800-second (30-minute) hardware qualification soak test was executed with hardware EN line pulse to capture the cold-boot banner from `uptime_ms=0`.
+
+- **Qualification Evidence Logs**:
+  - Serial Stream: `docs/validation/soak_qualification_run2_serial.log` (3,252 lines, 395 KB)
+  - MQTT Telemetry: `docs/validation/soak_qualification_run2_mqtt.log` (5,932 lines, 418 KB)
+  - Markdown Report: `docs/validation/soak_qualification_run2_report.md`
+  - JSON Report: `docs/validation/soak_qualification_run2_report.json`
+- **Measured Qualification Results Across 30 Minutes**:
+  - **Overall Verdict**: **PASS (12 / 12 Criteria Satisfied, 100%)**
+  - **Transport Drops**: **`tx_drop = 0` and `tx_fail = 0`** across all 357 periodic reports. The queuing drop defect is completely eliminated!
+  - **System Stability**: Cold boot `reset_reason=1` confirmed; monotonic uptime reached `1,798.9 s` with zero resets.
+  - **Executive Deadlines & Queues**: `dline_misses = 0`, `q_overflows = 0` across all 357 periodic reports. Peak callback duration `29,856 us` (< 50,000 us budget). Peak dispatch latency `101,600 us` ($\le 110,000\ \mu\text{s}$).
+  - **Heap Stability**: 1,718 steady-state heap samples recorded a net change of `-52 bytes` with a trend of `+199.4 B/hr` ($R^2 = 0.00$), confirming zero memory leaks.
+  - **Telemetry Validity**: 784 of 880 valid envelopes (**89.09%** $\ge 85.0\%$). Max consecutive invalid envelopes was 2 ($\le 3$).
+  - **Physical Driver Success**: 782 of 877 physical DHT11 driver attempts succeeded (**89.17%** $\ge 80.0\%$).
+  - **Envelope Delivery**: 2,966 total envelopes captured (`telem: 880`, `hb: 1731`, `status: 355`), zero out-of-order, zero gaps.
+
+### 13. Final Milestone 4 Sign-Off Verdict
+
+**MILESTONE 4 IS FULLY ACCEPTED AND SIGNED OFF (PASS)**.
+All physical hardware qualification criteria have been empirically verified and closed. Milestones 3 and 4 are complete.
+

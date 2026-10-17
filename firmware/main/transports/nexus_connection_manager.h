@@ -98,7 +98,6 @@ typedef struct nexus_conn_mgr {
     nexus_atomic_bool_t running;
 
 #ifdef ESP_PLATFORM
-    void *tx_mutex;       /* SemaphoreHandle_t */
     void *task_handle;    /* TaskHandle_t */
     void *task_exit_sem;  /* SemaphoreHandle_t */
 #else

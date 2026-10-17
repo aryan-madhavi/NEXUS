@@ -1,0 +1,158 @@
+I (13) boot: ESP-IDF v6.0.1 2nd stage bootloader
+I (13) boot: compile time Oct 17 2026 12:09:02
+I (13) boot: Multicore bootloader
+I (14) boot: chip revision: v3.1
+I (16) boot.esp32: SPI Speed      : 40MHz
+I (20) boot.esp32: SPI Mode       : DIO
+I (24) boot.esp32: SPI Flash Size : 2MB
+I (27) boot: Enabling RNG early entropy source...
+I (32) boot: Partition Table:
+I (34) boot: ## Label            Usage          Type ST Offset   Length
+I (41) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (47) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (54) boot:  2 factory          factory app      00 00 00010000 00100000
+I (60) boot: End of partition table
+I (64) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=20924h (133412) map
+I (119) esp_image: segment 1: paddr=0003094c vaddr=3ffb0000 size=045b8h ( 17848) load
+I (126) esp_image: segment 2: paddr=00034f0c vaddr=40080000 size=0b10ch ( 45324) load
+I (144) esp_image: segment 3: paddr=00040020 vaddr=400d0020 size=a4820h (673824) map
+I (385) esp_image: segment 4: paddr=000e4848 vaddr=4008b10c size=0a738h ( 42808) load
+I (402) esp_image: segment 5: paddr=000eef88 vaddr=50000000 size=00028h (    40) load
+I (414) boot: Loaded app from partition at offset 0x10000
+I (414) boot: Disabling RNG early entropy source...
+I (424) cpu_start: Multicore app
+I (433) cpu_start: GPIO 3 and 1 are used as console UART I/O pins
+I (433) cpu_start: Pro cpu start user code
+I (433) cpu_start: cpu freq: 160000000 Hz
+I (435) app_init: Application information:
+I (439) app_init: Project name:     nexus
+I (442) app_init: App version:      2386416-dirty
+I (447) app_init: Compile time:     Oct 17 2026 13:03:06
+I (452) app_init: ELF file SHA256:  30cc8d4b3...
+I (456) app_init: ESP-IDF:          v6.0.1
+I (460) efuse_init: Min chip rev:     v0.0
+I (464) efuse_init: Max chip rev:     v3.99 
+I (468) efuse_init: Chip rev:         v3.1
+I (472) heap_init: Initializing. RAM available for dynamic allocation:
+I (478) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
+I (483) heap_init: At 3FFBCA98 len 00023568 (141 KiB): DRAM
+I (488) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (494) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (499) heap_init: At 40095844 len 0000A7BC (41 KiB): IRAM
+I (506) spi_flash: detected chip: generic
+I (508) spi_flash: flash io: dio
+W (511) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
+I (525) main_task: Started on CPU0
+I (535) main_task: Calling app_main()
+I (535) nexus_main: NEXUS Milestone 4 Executive, Sensors & Unified Connection Manager initializing
+I (535) nexus_main: reset_reason=1
+I (535) nexus_main: Executive and bounded data structures self-test PASSED
+I (545) nexus_adc: ADC1 initialized for GPIO35 (ch7) and GPIO36 (ch0)
+I (545) nexus_ldr: LDR registered on GPIO35 (ADC1_CH7)
+I (555) nexus_sensors: Sensors initialized: LDR=OK, CD4051=OK, DHT11=OK (total registered=4)
+I (565) nexus_main: All sensor drivers and registry initialized successfully
+I (605) wifi:wifi driver task: 3ffc4dd0, prio:23, stack:6656, core=0
+I (615) wifi:wifi firmware version: b37c951
+I (615) wifi:wifi certification version: v7.0
+I (615) wifi:config NVS flash: enabled
+I (615) wifi:config nano formatting: disabled
+I (625) wifi:Init data frame dynamic rx buffer num: 32
+I (625) wifi:Init static rx mgmt buffer num: 5
+I (635) wifi:Init management short buffer num: 32
+I (635) wifi:Init dynamic tx buffer num: 32
+I (635) wifi:Init static rx buffer size: 1600
+I (645) wifi:Init static rx buffer num: 10
+I (645) wifi:Init dynamic rx buffer num: 32
+I (655) wifi_init: rx ba win: 6
+I (655) wifi_init: accept mbox: 6
+I (655) wifi_init: tcpip mbox: 32
+I (655) wifi_init: udp mbox: 6
+I (665) wifi_init: tcp mbox: 6
+I (665) wifi_init: tcp tx win: 5760
+I (665) wifi_init: tcp rx win: 5760
+I (675) wifi_init: tcp mss: 1440
+I (675) wifi_init: WiFi IRAM OP enabled
+I (675) wifi_init: WiFi RX IRAM OP enabled
+W (685) wifi:Password length matches WPA2 standards, authmode threshold changes from OPEN to WPA2
+I (695) nexus_main: Unified Connection Manager initialized successfully
+I (695) phy_init: phy_version 4863,a3a4459,Oct 28 2025,14:30:06
+I (785) wifi:mode : sta (8c:94:df:7d:02:58)
+I (785) wifi:enable tsf
+I (795) nexus_conn_mgr: Connection manager task started
+I (795) nexus_wifi_mqtt: Wi-Fi STA started, connecting...
+I (795) nexus_main: Unified Connection Manager started successfully
+I (795) nexus_main: project=nexus version=2386416-dirty build=Oct 17 2026 13:03:06
+I (805) wifi:I (805) nexus_main: target=classic_esp32 framework=esp-idf executive=active
+new:<11,0>, old:<1,0>, ap:<255,255>, sta:<11,0>, prof:1, snd_ch_cfg:0x0
+I (815) nexus_main: Registered Priority Class 1 sensor acquisition jobs
+I (825) wifi:state: init -> auth (0xb0)
+I (825) nexus_main: heartbeat uptime_ms=326 free_heap=199000
+I (805) main_task: Returned from app_main()
+I (835) nexus_main: exec_stats: ticks=1 dispatched=5 completed=4 failed=0 dline_misses=0 q_overflows=0 ready_hwm=6 ev_hwm=1 max_lat_us=0 max_dur_us=8964
+I (855) wifi:state: auth -> assoc (0x0)
+I (855) nexus_main: conn_stats: state=CONNECTED tx_enq=1 tx_disp=0 tx_drop=0 tx_fail=0 q_depth=0 q_hwm=1 rx_dup=0
+{"ver":1,"dev":"nexus_esp32","seq":1,"type":"hb","uptime":326,"heap":198792,"ticks":1}
+W (865) nexus_dht11: DHT11 read FAIL: handshake timeout (status=1, total_ok=0, total_err=1)
+{"ver":1,"dev":"nexus_esp32","seq":2,"type":"status","uptime":366,"disp":5,"comp":4,"fail":0,"lat_us":0,"dur_us":8964}
+{"ver":1,"dev":"nexus_esp32","seq":3,"type":"telem","uptime":366,"ldr":0,"x0":3087,"temp":0,"hum":0}
+I (905) wifi:state: assoc -> run (0x10)
+I (935) wifi:connected with Aryan, aid = 6, channel 11, BW20, bssid = d2:1b:8f:5a:fa:35
+I (935) wifi:security: WPA2-PSK, phy: bgn, rssi: -45, cipher(pairwise:0x3, group:0x3), pmf:0
+I (945) wifi:pm start, type: 1
+
+I (945) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (965) wifi:<ba-add>idx:0 (ifx:0, d2:1b:8f:5a:fa:35), tid:0, ssn:0, winSize:64
+I (975) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (975) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+I (1005) wifi:<ba-add>idx:1 (ifx:0, d2:1b:8f:5a:fa:35), tid:6, ssn:2, winSize:64
+I (1925) nexus_main: heartbeat uptime_ms=1420 free_heap=201448
+{"ver":1,"dev":"nexus_esp32","seq":4,"type":"hb","uptime":1420,"heap":201448,"ticks":12}
+I (1995) esp_netif_handlers: sta ip: 10.12.252.214, mask: 255.255.255.0, gw: 10.12.252.44
+I (1995) nexus_wifi_mqtt: Wi-Fi Got IP: 10.12.252.214
+I (2825) nexus_wifi_mqtt: MQTT connected to broker
+I (2925) nexus_main: heartbeat uptime_ms=2421 free_heap=194140
+I (2955) nexus_dht11: DHT11 read OK: temp=32°C, hum=52% (total_ok=1, total_err=1)
+I (4025) nexus_main: heartbeat uptime_ms=3520 free_heap=194132
+I (5025) nexus_main: heartbeat uptime_ms=4520 free_heap=194120
+I (5925) nexus_main: exec_stats: ticks=52 dispatched=28 completed=26 failed=1 dline_misses=0 q_overflows=0 ready_hwm=6 ev_hwm=3 max_lat_us=100000 max_dur_us=29738
+I (5925) nexus_main: conn_stats: state=CONNECTED tx_enq=9 tx_disp=9 tx_drop=0 tx_fail=0 q_depth=0 q_hwm=2 rx_dup=0
+I (6025) nexus_main: heartbeat uptime_ms=5520 free_heap=191992
+I (7125) nexus_main: heartbeat uptime_ms=6620 free_heap=194140
+I (8125) nexus_main: heartbeat uptime_ms=7620 free_heap=194140
+I (9125) nexus_main: heartbeat uptime_ms=8620 free_heap=194140
+I (10125) nexus_main: heartbeat uptime_ms=9620 free_heap=194140
+I (10925) nexus_main: exec_stats: ticks=102 dispatched=52 completed=50 failed=1 dline_misses=0 q_overflows=0 ready_hwm=6 ev_hwm=3 max_lat_us=100000 max_dur_us=29738
+I (10925) nexus_main: conn_stats: state=CONNECTED tx_enq=17 tx_disp=17 tx_drop=0 tx_fail=0 q_depth=0 q_hwm=2 rx_dup=0
+I (11125) nexus_main: heartbeat uptime_ms=10620 free_heap=193924
+I (12225) nexus_main: heartbeat uptime_ms=11720 free_heap=194140
+I (13225) nexus_main: heartbeat uptime_ms=12720 free_heap=194140
+I (14225) nexus_main: heartbeat uptime_ms=13720 free_heap=194140
+I (15225) nexus_main: heartbeat uptime_ms=14720 free_heap=194140
+I (15925) nexus_main: exec_stats: ticks=152 dispatched=79 completed=77 failed=1 dline_misses=0 q_overflows=0 ready_hwm=6 ev_hwm=3 max_lat_us=100000 max_dur_us=29738
+I (15925) nexus_main: conn_stats: state=CONNECTED tx_enq=26 tx_disp=26 tx_drop=0 tx_fail=0 q_depth=0 q_hwm=2 rx_dup=0
+I (16325) nexus_main: heartbeat uptime_ms=15820 free_heap=193924
+I (17325) nexus_main: heartbeat uptime_ms=16820 free_heap=193948
+I (18325) nexus_main: heartbeat uptime_ms=17820 free_heap=194132
+I (19325) nexus_main: heartbeat uptime_ms=18820 free_heap=194132
+I (20425) nexus_main: heartbeat uptime_ms=19920 free_heap=194128
+I (21025) nexus_main: exec_stats: ticks=203 dispatched=103 completed=101 failed=1 dline_misses=0 q_overflows=0 ready_hwm=6 ev_hwm=3 max_lat_us=100004 max_dur_us=29738
+I (21025) nexus_main: conn_stats: state=CONNECTED tx_enq=34 tx_disp=34 tx_drop=0 tx_fail=0 q_depth=0 q_hwm=2 rx_dup=0
+I (21425) nexus_main: heartbeat uptime_ms=20920 free_heap=194140
+I (22425) nexus_main: heartbeat uptime_ms=21920 free_heap=194140
+I (23425) nexus_main: heartbeat uptime_ms=22921 free_heap=193996
+I (24525) nexus_main: heartbeat uptime_ms=24020 free_heap=194140
+I (25525) nexus_main: heartbeat uptime_ms=25020 free_heap=192396
+I (26125) nexus_main: exec_stats: ticks=254 dispatched=129 completed=127 failed=1 dline_misses=0 q_overflows=0 ready_hwm=6 ev_hwm=3 max_lat_us=100004 max_dur_us=29738
+I (26125) nexus_main: conn_stats: state=CONNECTED tx_enq=43 tx_disp=43 tx_drop=0 tx_fail=0 q_depth=0 q_hwm=2 rx_dup=0
+I (26625) nexus_main: heartbeat uptime_ms=26120 free_heap=192164
+I (27625) nexus_main: heartbeat uptime_ms=27120 free_heap=190428
+I (28725) nexus_main: heartbeat uptime_ms=28220 free_heap=194140
+I (29725) nexus_main: heartbeat uptime_ms=29220 free_heap=193948
+I (30825) nexus_main: heartbeat uptime_ms=30320 free_heap=194140
+I (31125) nexus_main: exec_stats: ticks=304 dispatched=153 completed=151 failed=1 dline_misses=0 q_overflows=0 ready_hwm=6 ev_hwm=3 max_lat_us=100008 max_dur_us=29738
+I (31125) nexus_main: conn_stats: state=CONNECTED tx_enq=51 tx_disp=51 tx_drop=0 tx_fail=0 q_depth=0 q_hwm=2 rx_dup=0
+I (31925) nexus_main: heartbeat uptime_ms=31420 free_heap=193948
+I (32925) nexus_main: heartbeat uptime_ms=32420 free_heap=194132
+I (33655) nexus_dht11: DHT11 read OK: temp=32°C, hum=52% (total_ok=16, total_err=1)
+I (33925) nexus_main: heartbeat uptime_ms=33420 free_heap=193948
+I (34925) nexus_main: heartbeat uptime_ms=34420 free_heap=194140
