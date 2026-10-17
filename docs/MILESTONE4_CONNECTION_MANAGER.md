@@ -63,9 +63,13 @@ Messages are formatted in newline-delimited JSON (`\n`) adhering to the NEXUS Pr
   ```json
   {"ver":1,"dev":"nexus_esp32","seq":101,"type":"hb","uptime":12345,"heap":245000,"ticks":120}
   ```
-- **Telemetry (`telem`):**
+- **Telemetry (`telem` — Valid DHT11 sample):**
   ```json
-  {"ver":1,"dev":"nexus_esp32","seq":102,"type":"telem","uptime":12350,"ldr":2048,"x0":1024,"temp":25,"hum":60}
+  {"ver":1,"dev":"nexus_esp32","seq":102,"type":"telem","uptime":12350,"ldr":2048,"x0":1024,"temp":25,"hum":60,"dht_valid":true}
+  ```
+- **Telemetry (`telem` — Uninitialized or Degraded DHT11 sample, temp/hum omitted):**
+  ```json
+  {"ver":1,"dev":"nexus_esp32","seq":102,"type":"telem","uptime":12350,"ldr":2048,"x0":1024,"dht_valid":false}
   ```
 - **Status (`status`):**
   ```json
@@ -116,7 +120,7 @@ Messages are formatted in newline-delimited JSON (`\n`) adhering to the NEXUS Pr
 | Test Suite / Target | Description | Result | Details |
 |---|---|---|---|
 | `test_milestone2_host` | Job table, queues, ring buffer, executive lifecycle | **5/5 PASSED (100%)** | Zero regression |
-| `test_milestone3_host` | Sensor registry, LDR, Mux, DHT11, timing contract | **9/9 PASSED (100%)** | Zero regression |
-| `test_milestone4_host` | Envelope serialization, bounded parsing (F-01), queue saturation, routing, composite dedup (F-02), backoff (F-04), defaults/lifecycle (F-05/F-06), worker stop start-rejection, timing isolation, executive integration | **11/11 PASSED (100%)** | Enqueue duration: **89 ns/op** (host without sanitizers), **583 ns/op** (ASan); sub-3-µs ESP32 duration is an analytical estimate |
-| `test_milestone4_host (ASan/UBSan)` | Clang AddressSanitizer and UndefinedBehaviorSanitizer memory safety run | **11/11 PASSED (100%)** | 0 memory leaks, 0 buffer overruns, 0 UB |
-| `firmware (ESP-IDF v6.0.1)` | Native cross-compilation for ESP32 with MQTT & Wi-Fi components | **BUILD SUCCEEDED** | Binary: `nexus.bin` (0xdd810 bytes / 886 KB, SHA-256: `f5b5f4765cb764755b9e78cbaf49bb069163a7d94b7b2ae8c7c677b722e7b8d0`, 13% partition free, 0 warnings, 0 errors) |
+| `test_milestone3_host` | Sensor registry, LDR, Mux, DHT11 (safe API & error classification), timing contract | **11/11 PASSED (100%)** | Zero regression |
+| `test_milestone4_host` | Envelope serialization, bounded parsing (F-01), queue saturation, routing, composite dedup (F-02), backoff (F-04), defaults/lifecycle (F-05/F-06), worker stop start-rejection, timing isolation, executive integration, MQTT inbound receive-path, telemetry schema validity | **13/13 PASSED (100%)** | Enqueue duration: **64 ns/op** (host without sanitizers), **597 ns/op** (ASan); sub-3-µs ESP32 duration is an analytical estimate |
+| `test_milestone4_host (ASan/UBSan)` | Clang AddressSanitizer and UndefinedBehaviorSanitizer memory safety run | **13/13 PASSED (100%)** | 0 memory leaks, 0 buffer overruns, 0 UB |
+| `firmware (ESP-IDF v6.0.1)` | Native cross-compilation for ESP32 with MQTT & Wi-Fi components (`credentials/sdkconfig.local` in `build/`) | **BUILD SUCCEEDED** | Binary: `nexus.bin` (0xdf0f0 bytes / 913,648 bytes, SHA-256: `fa9b9c92976b27490e7bece4fc1a0b23b12027a28b8df2d8eee7e4dd4502cbac`, 13% partition free, 0 warnings, 0 errors) |

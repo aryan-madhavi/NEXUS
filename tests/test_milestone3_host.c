@@ -195,6 +195,9 @@ static void test_dht11_decoder_and_errors(void)
     assert(hum_desc->latest_processed == 45);
     assert(temp_desc->sample_count == 1);
     assert(hum_desc->sample_count == 1);
+    assert(temp_desc->error_count == 0);
+    assert(temp_desc->timeout_count == 0);
+    assert(nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_TEMP, 1500000LL, 2000));
 
     /* Case 2: Checksum failure (Checksum corrupt: 72 instead of 71) */
     uint8_t bad_crc_bytes[5] = { 45, 0, 26, 0, 72 };
@@ -203,12 +206,38 @@ static void test_dht11_decoder_and_errors(void)
     assert(!nexus_dht11_acquire(&reg, &exec, 2000000LL));
     assert(temp_desc->error_count == 1);
     assert(hum_desc->error_count == 1);
+    /* CRC failure must NOT increment timeout_count */
+    assert(temp_desc->timeout_count == 0);
+    assert(hum_desc->timeout_count == 0);
+    /* Last known good values must be preserved */
+    assert(temp_desc->latest_processed == 26);
+    assert(hum_desc->latest_processed == 45);
+    /* Descriptor flags must be marked ERROR and STALE */
+    assert((temp_desc->sample_flags & (NEXUS_SAMPLE_FLAG_ERROR | NEXUS_SAMPLE_FLAG_STALE)) != 0);
+    assert(!nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_TEMP, 2100000LL, 2000));
 
     /* Case 3: Timeout simulation */
     nexus_dht11_set_mock_packet(valid_bytes, true);
     assert(!nexus_dht11_acquire(&reg, &exec, 3000000LL));
     assert(temp_desc->error_count == 2);
-    assert(temp_desc->timeout_count == 2);
+    /* Actual timeout increments timeout_count */
+    assert(temp_desc->timeout_count == 1);
+    assert(hum_desc->timeout_count == 1);
+    /* Values still preserved */
+    assert(temp_desc->latest_processed == 26);
+    assert(hum_desc->latest_processed == 45);
+
+    /* Case 4: Recovery with fresh valid packet */
+    uint8_t fresh_bytes[5] = { 50, 0, 28, 0, 78 };
+    nexus_dht11_set_mock_packet(fresh_bytes, false);
+    assert(nexus_dht11_acquire(&reg, &exec, 4000000LL));
+    assert(temp_desc->sample_count == 2);
+    assert(hum_desc->sample_count == 2);
+    assert(temp_desc->latest_processed == 28);
+    assert(hum_desc->latest_processed == 50);
+    assert((temp_desc->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0);
+    assert((temp_desc->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0);
+    assert(nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_TEMP, 4500000LL, 2000));
 
     printf("  [PASS] DHT11 packet parsing, checksum, and timeout handling\n");
 }
@@ -256,6 +285,166 @@ static void test_sensors_executive_integration(void)
     assert(nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_TEMP, 2100000LL, 2500));
 
     printf("  [PASS] Sensor integration with Executive Priority Class 1 jobs\n");
+}
+
+static void test_dht11_error_classification_and_publication(void)
+{
+    printf("  [TEST] DHT11 error classification, single publication, and stale preservation...\n");
+    nexus_sensor_registry_t reg;
+    nexus_sensor_registry_init(&reg);
+    nexus_executive_t exec;
+    nexus_executive_init(&exec, 100);
+
+    assert(nexus_dht11_init(&reg));
+
+    nexus_sensor_descriptor_t *temp_desc = nexus_sensor_get(&reg, NEXUS_SENSOR_ID_DHT11_TEMP);
+    nexus_sensor_descriptor_t *hum_desc = nexus_sensor_get(&reg, NEXUS_SENSOR_ID_DHT11_HUM);
+    assert(temp_desc != NULL && hum_desc != NULL);
+
+    /* 1. Status verification: Valid packet */
+    uint8_t packet[5] = { 60, 0, 22, 0, 82 };
+    nexus_dht11_set_mock_packet(packet, false);
+    nexus_dht11_reading_t rd;
+    nexus_dht11_status_t st;
+    assert(nexus_dht11_read_with_status(&rd, &st));
+    assert(st == NEXUS_DHT11_STATUS_OK);
+    assert(rd.valid);
+    assert(rd.temperature_c == 22);
+    assert(rd.humidity_pct == 60);
+
+    /* 2. Status verification: Checksum error */
+    uint8_t bad_packet[5] = { 60, 0, 22, 0, 99 };
+    nexus_dht11_set_mock_packet(bad_packet, false);
+    assert(!nexus_dht11_read_with_status(&rd, &st));
+    assert(st == NEXUS_DHT11_STATUS_ERROR_CHECKSUM);
+    assert(!rd.valid);
+
+    /* 3. Status verification: Handshake timeout */
+    nexus_dht11_set_mock_packet(packet, true);
+    assert(!nexus_dht11_read_with_status(&rd, &st));
+    assert(st == NEXUS_DHT11_STATUS_TIMEOUT_HANDSHAKE);
+    assert(!rd.valid);
+
+    /* 4. Single publication and timestamp integrity */
+    nexus_dht11_set_mock_packet(packet, false);
+    int64_t t1_us = 1000000LL;
+    assert(nexus_dht11_acquire(&reg, &exec, t1_us));
+    assert(temp_desc->sample_count == 1);
+    assert(temp_desc->last_sample_time_us == t1_us);
+    assert(temp_desc->latest_processed == 22);
+    assert(hum_desc->sample_count == 1);
+    assert(hum_desc->latest_processed == 60);
+
+    /* Verify ring buffer has exactly 1 temp and 1 hum sample */
+    nexus_sensor_sample_t s_hum, s_temp;
+    assert(nexus_ring_buffer_pop(&exec.sensor_history, &s_temp));
+    assert(s_temp.sensor_id == NEXUS_SENSOR_ID_DHT11_TEMP);
+    assert(s_temp.raw_value == 22);
+    assert(s_temp.timestamp_us == t1_us);
+    assert(nexus_ring_buffer_pop(&exec.sensor_history, &s_hum));
+    assert(s_hum.sensor_id == NEXUS_SENSOR_ID_DHT11_HUM);
+    assert(s_hum.raw_value == 60);
+    assert(s_hum.timestamp_us == t1_us);
+    /* Ring buffer should now be empty */
+    assert(exec.sensor_history.count == 0);
+
+    /* 5. Acquisition error preserves last known good value without updating timestamp */
+    nexus_dht11_set_mock_packet(bad_packet, false);
+    int64_t t2_us = 3000000LL;
+    assert(!nexus_dht11_acquire(&reg, &exec, t2_us));
+    /* Sample count and timestamp remain unchanged from t1 */
+    assert(temp_desc->sample_count == 1);
+    assert(temp_desc->last_sample_time_us == t1_us);
+    assert(temp_desc->latest_processed == 22);
+    assert(hum_desc->sample_count == 1);
+    assert(hum_desc->last_sample_time_us == t1_us);
+    assert(hum_desc->latest_processed == 60);
+    /* Error flags set, stale set for BOTH temperature and humidity */
+    assert((temp_desc->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) != 0);
+    assert((temp_desc->sample_flags & NEXUS_SAMPLE_FLAG_STALE) != 0);
+    assert((hum_desc->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) != 0);
+    assert((hum_desc->sample_flags & NEXUS_SAMPLE_FLAG_STALE) != 0);
+    /* Freshness check must fail for both */
+    assert(!nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_TEMP, t2_us, 5000));
+    assert(!nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_HUM, t2_us, 5000));
+    /* CRC failure: error_count=1, timeout_count=0 */
+    assert(temp_desc->error_count == 1);
+    assert(temp_desc->timeout_count == 0);
+    assert(hum_desc->error_count == 1);
+    assert(hum_desc->timeout_count == 0);
+
+    /* Neither ring buffer sample nor history event added on failed acquisition */
+    assert(exec.sensor_history.count == 0);
+    assert(exec.event_queue.count == 0);
+
+    /* 6. Successful recovery clears error/stale flags and restores freshness */
+    nexus_dht11_set_mock_packet(packet, false);
+    int64_t t3_us = 5000000LL;
+    assert(nexus_dht11_acquire(&reg, &exec, t3_us));
+    assert(temp_desc->sample_count == 2);
+    assert(temp_desc->last_sample_time_us == t3_us);
+    assert(temp_desc->latest_processed == 22);
+    assert(temp_desc->sample_flags == (NEXUS_SAMPLE_FLAG_VALID | NEXUS_SAMPLE_FLAG_CALIBRATED));
+    assert((temp_desc->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0);
+    assert((temp_desc->sample_flags & NEXUS_SAMPLE_FLAG_STALE) == 0);
+    assert(nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_TEMP, t3_us, 5000));
+
+    assert(hum_desc->sample_count == 2);
+    assert(hum_desc->last_sample_time_us == t3_us);
+    assert(hum_desc->latest_processed == 60);
+    assert(hum_desc->sample_flags == (NEXUS_SAMPLE_FLAG_VALID | NEXUS_SAMPLE_FLAG_CALIBRATED));
+    assert((hum_desc->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0);
+    assert((hum_desc->sample_flags & NEXUS_SAMPLE_FLAG_STALE) == 0);
+    assert(nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_HUM, t3_us, 5000));
+
+    /* Verify ring buffer received 1 new temp and 1 new hum sample */
+    assert(exec.sensor_history.count == 2);
+
+    printf("  [PASS] DHT11 error classification, single publication, stale preservation, and recovery\n");
+}
+
+static void test_dht11_safe_api_and_uninitialized_state(void)
+{
+    printf("  [TEST] DHT11 safe read API, invalid argument, and uninitialized registry state...\n");
+
+    /* 1. NULL pointer checking */
+    nexus_dht11_status_t st = NEXUS_DHT11_STATUS_OK;
+    assert(!nexus_dht11_read_with_status(NULL, &st));
+    assert(st == NEXUS_DHT11_STATUS_INVALID_ARG);
+    assert(!nexus_dht11_read(NULL));
+
+    /* 2. Invalidate pre-existing valid structure on failed read */
+    uint8_t bad_packet[5] = { 60, 0, 22, 0, 99 };
+    nexus_dht11_set_mock_packet(bad_packet, false);
+    nexus_dht11_reading_t rd = { .temperature_c = 28, .humidity_pct = 70, .valid = true };
+    assert(!nexus_dht11_read_with_status(&rd, &st));
+    assert(!rd.valid); /* Pre-existing valid flag must be reset to false */
+    assert(st == NEXUS_DHT11_STATUS_ERROR_CHECKSUM);
+
+    /* 3. Uninitialized sensor registry state before any samples acquired */
+    nexus_sensor_registry_t reg;
+    nexus_sensor_registry_init(&reg);
+    assert(nexus_dht11_init(&reg));
+
+    nexus_sensor_descriptor_t *td = nexus_sensor_get(&reg, NEXUS_SENSOR_ID_DHT11_TEMP);
+    nexus_sensor_descriptor_t *hd = nexus_sensor_get(&reg, NEXUS_SENSOR_ID_DHT11_HUM);
+    assert(td != NULL && hd != NULL);
+
+    /* Zero samples acquired */
+    assert(td->sample_count == 0);
+    assert(hd->sample_count == 0);
+    assert(td->last_sample_time_us == 0);
+    assert(hd->last_sample_time_us == 0);
+
+    /* Valid flag MUST NOT be set */
+    assert((td->sample_flags & NEXUS_SAMPLE_FLAG_VALID) == 0);
+    assert((hd->sample_flags & NEXUS_SAMPLE_FLAG_VALID) == 0);
+
+    /* Freshness check MUST return false */
+    assert(!nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_TEMP, 1000000LL, 5000));
+    assert(!nexus_sensor_is_fresh(&reg, NEXUS_SENSOR_ID_DHT11_HUM, 1000000LL, 5000));
+
+    printf("  [PASS] DHT11 safe read API, invalid argument, and uninitialized registry state\n");
 }
 
 static bool s_overbudget_ran = false;
@@ -572,6 +761,8 @@ int main(void)
     test_ldr_driver();
     test_cd4051_truth_table_and_sampling();
     test_dht11_decoder_and_errors();
+    test_dht11_error_classification_and_publication();
+    test_dht11_safe_api_and_uninitialized_state();
     test_sensors_executive_integration();
     test_executive_scheduling_and_deadline_miss_accounting();
     test_executive_in_flight_metrics_accounting();

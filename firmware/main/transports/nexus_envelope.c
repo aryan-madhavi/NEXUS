@@ -17,6 +17,38 @@ const char *nexus_msg_type_str(nexus_msg_type_t type)
     }
 }
 
+bool nexus_envelope_parse_type(const char *type_str, nexus_msg_type_t *out_type)
+{
+    if (!type_str || !out_type) {
+        return false;
+    }
+    if (strcmp(type_str, "cmd") == 0 || strcmp(type_str, "command") == 0) {
+        *out_type = NEXUS_MSG_TYPE_COMMAND;
+        return true;
+    }
+    if (strcmp(type_str, "hb") == 0 || strcmp(type_str, "heartbeat") == 0) {
+        *out_type = NEXUS_MSG_TYPE_HEARTBEAT;
+        return true;
+    }
+    if (strcmp(type_str, "telem") == 0 || strcmp(type_str, "telemetry") == 0) {
+        *out_type = NEXUS_MSG_TYPE_TELEMETRY;
+        return true;
+    }
+    if (strcmp(type_str, "event") == 0) {
+        *out_type = NEXUS_MSG_TYPE_EVENT;
+        return true;
+    }
+    if (strcmp(type_str, "status") == 0) {
+        *out_type = NEXUS_MSG_TYPE_STATUS;
+        return true;
+    }
+    if (strcmp(type_str, "resp") == 0 || strcmp(type_str, "response") == 0) {
+        *out_type = NEXUS_MSG_TYPE_RESPONSE;
+        return true;
+    }
+    return false;
+}
+
 void nexus_envelope_init(nexus_envelope_t *env)
 {
     if (!env) {
@@ -60,7 +92,8 @@ bool nexus_envelope_format_telemetry(nexus_envelope_t *env,
                                      int32_t ldr_raw,
                                      int32_t mux_x0_raw,
                                      int32_t dht_temp,
-                                     int32_t dht_hum)
+                                     int32_t dht_hum,
+                                     bool dht_valid)
 {
     if (!env) {
         return false;
@@ -69,13 +102,25 @@ bool nexus_envelope_format_telemetry(nexus_envelope_t *env,
     env->seq = seq;
     env->type = NEXUS_MSG_TYPE_TELEMETRY;
 
-    int written = snprintf((char *)env->buffer, NEXUS_ENVELOPE_MAX_LEN,
+    int written;
+    if (dht_valid) {
+        written = snprintf((char *)env->buffer, NEXUS_ENVELOPE_MAX_LEN,
                            "{\"ver\":%u,\"dev\":\"%s\",\"seq\":%" PRIu32
                            ",\"type\":\"telem\",\"uptime\":%" PRId64
                            ",\"ldr\":%" PRId32 ",\"x0\":%" PRId32
-                           ",\"temp\":%" PRId32 ",\"hum\":%" PRId32 "}\n",
+                           ",\"temp\":%" PRId32 ",\"hum\":%" PRId32
+                           ",\"dht_valid\":true}\n",
                            NEXUS_PROTOCOL_VERSION, NEXUS_DEVICE_ID_DEFAULT,
                            seq, uptime_ms, ldr_raw, mux_x0_raw, dht_temp, dht_hum);
+    } else {
+        written = snprintf((char *)env->buffer, NEXUS_ENVELOPE_MAX_LEN,
+                           "{\"ver\":%u,\"dev\":\"%s\",\"seq\":%" PRIu32
+                           ",\"type\":\"telem\",\"uptime\":%" PRId64
+                           ",\"ldr\":%" PRId32 ",\"x0\":%" PRId32
+                           ",\"dht_valid\":false}\n",
+                           NEXUS_PROTOCOL_VERSION, NEXUS_DEVICE_ID_DEFAULT,
+                           seq, uptime_ms, ldr_raw, mux_x0_raw);
+    }
 
     if (written <= 0 || (size_t)written >= NEXUS_ENVELOPE_MAX_LEN) {
         env->length = 0;

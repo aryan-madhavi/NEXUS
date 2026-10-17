@@ -144,6 +144,7 @@ static bool job_connection_telemetry(void *user_ctx)
     int32_t mux_x0_raw = 0;
     int32_t dht_temp = 0;
     int32_t dht_hum = 0;
+    bool dht_valid = false;
 
     nexus_sensor_descriptor_t *s_ldr = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_LDR);
     if (s_ldr) {
@@ -154,12 +155,20 @@ static bool job_connection_telemetry(void *user_ctx)
         mux_x0_raw = s_mux->latest_raw;
     }
     nexus_sensor_descriptor_t *s_temp = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_DHT11_TEMP);
-    if (s_temp) {
-        dht_temp = s_temp->latest_processed;
-    }
     nexus_sensor_descriptor_t *s_hum = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_DHT11_HUM);
-    if (s_hum) {
-        dht_hum = s_hum->latest_processed;
+    if (s_temp && s_hum) {
+        /* Only publish temperature and humidity if genuine valid samples have been acquired,
+         * with VALID flag set and without ERROR flag. Prevents publishing uninitialized 0 values at startup. */
+        if (s_temp->sample_count > 0 &&
+            (s_temp->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+            (s_temp->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0 &&
+            s_hum->sample_count > 0 &&
+            (s_hum->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+            (s_hum->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0) {
+            dht_temp = s_temp->latest_processed;
+            dht_hum = s_hum->latest_processed;
+            dht_valid = true;
+        }
     }
 
     nexus_conn_mgr_send_telemetry(&s_conn_mgr,
@@ -168,6 +177,7 @@ static bool job_connection_telemetry(void *user_ctx)
                                   mux_x0_raw,
                                   dht_temp,
                                   dht_hum,
+                                  dht_valid,
                                   NEXUS_ROUTE_AUTO);
     return true;
 }

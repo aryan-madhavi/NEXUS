@@ -74,6 +74,12 @@ static void unlock_tx(nexus_conn_mgr_t *mgr)
 #endif
 }
 
+static bool conn_mgr_mqtt_rx_trampoline(void *user_ctx, const uint8_t *data, size_t len)
+{
+    nexus_conn_mgr_t *mgr = (nexus_conn_mgr_t *)user_ctx;
+    return nexus_conn_mgr_process_rx(mgr, NEXUS_TRANSPORT_TYPE_MQTT, data, len);
+}
+
 bool nexus_conn_mgr_init(nexus_conn_mgr_t *mgr, const nexus_conn_mgr_config_t *config)
 {
     if (!mgr) {
@@ -97,6 +103,7 @@ bool nexus_conn_mgr_init(nexus_conn_mgr_t *mgr, const nexus_conn_mgr_config_t *c
         return false;
     }
     mgr->transports[NEXUS_TRANSPORT_TYPE_MQTT] = &mgr->mqtt_transport;
+    nexus_wifi_mqtt_transport_set_rx_handler(&mgr->mqtt_transport, conn_mgr_mqtt_rx_trampoline, mgr);
 
 #ifdef ESP_PLATFORM
     mgr->tx_mutex = xSemaphoreCreateMutex();
@@ -327,6 +334,7 @@ bool nexus_conn_mgr_send_telemetry(nexus_conn_mgr_t *mgr,
                                    int32_t mux_x0_raw,
                                    int32_t dht_temp,
                                    int32_t dht_hum,
+                                   bool dht_valid,
                                    nexus_route_policy_t route)
 {
     if (!mgr) {
@@ -335,7 +343,7 @@ bool nexus_conn_mgr_send_telemetry(nexus_conn_mgr_t *mgr,
 
     nexus_envelope_t env;
     uint32_t seq = mgr->next_seq++;
-    if (!nexus_envelope_format_telemetry(&env, seq, uptime_ms, ldr_raw, mux_x0_raw, dht_temp, dht_hum)) {
+    if (!nexus_envelope_format_telemetry(&env, seq, uptime_ms, ldr_raw, mux_x0_raw, dht_temp, dht_hum, dht_valid)) {
         return false;
     }
 
@@ -557,6 +565,22 @@ bool nexus_conn_mgr_process_rx(nexus_conn_mgr_t *mgr,
         return false;
     }
 
+    /* Reject unsupported protocol versions */
+    if (version != NEXUS_PROTOCOL_VERSION) {
+        return false;
+    }
+
+    /* Parse and validate envelope message type */
+    nexus_msg_type_t msg_type;
+    if (!nexus_envelope_parse_type(type_str, &msg_type)) {
+        return false;
+    }
+
+    /* Enforce permitted ingress types: MQTT ingress on /cmd topic permits only COMMAND messages */
+    if (source == NEXUS_TRANSPORT_TYPE_MQTT && msg_type != NEXUS_MSG_TYPE_COMMAND) {
+        return false;
+    }
+
     /* Sequence deduplication filter using composite identity: (source, dev, seq) */
     if (nexus_conn_mgr_is_duplicate(mgr, source, dev_str, seq)) {
         mgr->dedup.duplicates_detected++;
@@ -573,6 +597,7 @@ bool nexus_conn_mgr_process_rx(nexus_conn_mgr_t *mgr,
         env.buffer[copy_len] = '\0';
         env.length = (uint16_t)copy_len;
         env.seq = seq;
+        env.type = msg_type;
         env.timestamp_us = esp_timer_get_time();
 
         mgr->rx_cb(mgr->rx_user_ctx, source, &env);

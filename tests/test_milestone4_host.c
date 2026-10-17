@@ -37,13 +37,28 @@ static void test_envelope_serialization_and_framing(void)
     assert(strcmp(type_str, "hb") == 0);
     assert(strcmp(dev_str, NEXUS_DEVICE_ID_DEFAULT) == 0);
 
-    /* 2. Telemetry envelope */
-    ok = nexus_envelope_format_telemetry(&env, 102, 12350, 2048, 1024, 25, 60);
+    /* 2. Telemetry envelope (with valid DHT11) */
+    ok = nexus_envelope_format_telemetry(&env, 102, 12350, 2048, 1024, 25, 60, true);
     assert(ok);
     assert(env.buffer[env.length - 1] == '\n');
+    assert(strstr((char *)env.buffer, "\"temp\":25") != NULL);
+    assert(strstr((char *)env.buffer, "\"hum\":60") != NULL);
+    assert(strstr((char *)env.buffer, "\"dht_valid\":true") != NULL);
     ok = nexus_envelope_parse_header(env.buffer, env.length, &ver, &seq, type_str, sizeof(type_str));
     assert(ok);
     assert(seq == 102);
+    assert(strcmp(type_str, "telem") == 0);
+
+    /* 2b. Telemetry envelope (uninitialized/invalid DHT11: temp/hum omitted, dht_valid:false) */
+    ok = nexus_envelope_format_telemetry(&env, 105, 12355, 2048, 1024, 0, 0, false);
+    assert(ok);
+    assert(env.buffer[env.length - 1] == '\n');
+    assert(strstr((char *)env.buffer, "\"temp\"") == NULL);
+    assert(strstr((char *)env.buffer, "\"hum\"") == NULL);
+    assert(strstr((char *)env.buffer, "\"dht_valid\":false") != NULL);
+    ok = nexus_envelope_parse_header(env.buffer, env.length, &ver, &seq, type_str, sizeof(type_str));
+    assert(ok);
+    assert(seq == 105);
     assert(strcmp(type_str, "telem") == 0);
 
     /* 3. Status envelope */
@@ -321,6 +336,7 @@ static void test_routing_policies(void)
 static uint32_t s_rx_callback_invocations = 0;
 static uint32_t s_last_received_seq = 0;
 static nexus_transport_type_t s_last_received_source = NEXUS_TRANSPORT_TYPE_SERIAL;
+static nexus_msg_type_t s_last_received_type = NEXUS_MSG_TYPE_HEARTBEAT;
 
 static void mock_rx_callback(void *user_ctx, nexus_transport_type_t source, const nexus_envelope_t *env)
 {
@@ -328,6 +344,7 @@ static void mock_rx_callback(void *user_ctx, nexus_transport_type_t source, cons
     s_rx_callback_invocations++;
     s_last_received_source = source;
     s_last_received_seq = env->seq;
+    s_last_received_type = env->type;
 }
 
 static void test_f02_composite_deduplication_and_isolation(void)
@@ -342,9 +359,14 @@ static void test_f02_composite_deduplication_and_isolation(void)
     s_rx_callback_invocations = 0;
     s_last_received_seq = 0;
 
-    /* Build envelope with seq = 501 */
+    /* Build command envelope with seq = 501 */
     nexus_envelope_t env;
-    assert(nexus_envelope_format_heartbeat(&env, 501, 1000, 200000, 10));
+    nexus_envelope_init(&env);
+    env.seq = 501;
+    env.type = NEXUS_MSG_TYPE_COMMAND;
+    const char *cmd_501 = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":501,\"type\":\"cmd\"}\n";
+    memcpy(env.buffer, cmd_501, strlen(cmd_501) + 1);
+    env.length = (uint16_t)strlen(cmd_501);
 
     /* 1. Packet arrives over Serial (source = SERIAL, seq = 501) -> Processed */
     bool processed = nexus_conn_mgr_process_rx(&mgr, NEXUS_TRANSPORT_TYPE_SERIAL, env.buffer, env.length);
@@ -657,7 +679,7 @@ static bool job_integ_metrics(void *ctx)
 static bool job_integ_telemetry(void *ctx)
 {
     (void)ctx;
-    return nexus_conn_mgr_send_telemetry(&s_integ_conn_mgr, 1000, 1500, 800, 26, 55, NEXUS_ROUTE_AUTO);
+    return nexus_conn_mgr_send_telemetry(&s_integ_conn_mgr, 1000, 1500, 800, 26, 55, true, NEXUS_ROUTE_AUTO);
 }
 
 static void test_executive_and_sensors_integration(void)
@@ -711,6 +733,369 @@ static void test_executive_and_sensors_integration(void)
     printf("  [PASS] End-to-end integration: Executive jobs enqueuing to Connection Manager\n");
 }
 
+static void test_mqtt_inbound_rx_and_fragmentation(void)
+{
+    printf("  [TEST] MQTT Inbound Receive Path: validation, fragmentation, and deduplication...\n");
+
+    nexus_conn_mgr_t mgr;
+    assert(nexus_conn_mgr_init(&mgr, NULL));
+    assert(nexus_conn_mgr_start(&mgr));
+
+    nexus_wifi_mqtt_mock_set_connected(&mgr.mqtt_transport, true);
+    nexus_conn_mgr_set_rx_callback(&mgr, mock_rx_callback, NULL);
+    s_rx_callback_invocations = 0;
+    s_last_received_seq = 0;
+    s_last_received_type = NEXUS_MSG_TYPE_HEARTBEAT;
+
+    const char *cmd_topic = "nexus/nexus_esp32/cmd";
+    int cmd_topic_len = (int)strlen(cmd_topic);
+
+    /* 1. Complete unfragmented valid inbound envelope */
+    const char *msg1 = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":701,\"type\":\"cmd\"}\n";
+    int msg1_len = (int)strlen(msg1);
+
+    bool ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                         cmd_topic, cmd_topic_len,
+                                                         msg1, msg1_len, 0, msg1_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 1);
+    assert(s_last_received_source == NEXUS_TRANSPORT_TYPE_MQTT);
+    assert(s_last_received_seq == 701);
+    assert(s_last_received_type == NEXUS_MSG_TYPE_COMMAND);
+
+    nexus_transport_stats_t mstats;
+    mgr.mqtt_transport.ops->get_stats(&mgr.mqtt_transport, &mstats);
+    assert(mstats.rx_packets == 1);
+    assert(mstats.rx_bytes == (uint32_t)msg1_len);
+    assert(mstats.rx_errors == 0);
+
+    /* 2. Valid multi-fragment inbound envelope (65 bytes in 3 chunks: 20, 25, 20) */
+    const char *msg2 = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":702,\"type\":\"cmd\",\"val\":99}\n";
+    int msg2_len = (int)strlen(msg2);
+    assert(msg2_len == 65);
+
+    /* Chunk 1: offset 0, len 20 */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg2, 20, 0, msg2_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 1); /* Not yet complete! */
+
+    /* Chunk 2: offset 20, len 25 (topic NULL as per ESP-IDF MQTT spec) */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    NULL, 0,
+                                                    msg2 + 20, 25, 20, msg2_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 1); /* Still not complete */
+
+    /* Chunk 3: offset 45, len 20 (completes message) */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    NULL, 0,
+                                                    msg2 + 45, 20, 45, msg2_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 2); /* Dispatched exactly once! */
+    assert(s_last_received_source == NEXUS_TRANSPORT_TYPE_MQTT);
+    assert(s_last_received_seq == 702);
+    assert(s_last_received_type == NEXUS_MSG_TYPE_COMMAND);
+
+    mgr.mqtt_transport.ops->get_stats(&mgr.mqtt_transport, &mstats);
+    assert(mstats.rx_packets == 2);
+    assert(mstats.rx_bytes == (uint32_t)(msg1_len + msg2_len));
+    assert(mstats.rx_errors == 0);
+
+    /* 3. Inbound envelope type enforcement: non-cmd types on /cmd topic rejected */
+    const char *bad_type_telem = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":703,\"type\":\"telem\"}\n";
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    bad_type_telem, (int)strlen(bad_type_telem),
+                                                    0, (int)strlen(bad_type_telem));
+    assert(!ok); /* Rejected: telem on /cmd topic disallowed */
+    assert(s_rx_callback_invocations == 2);
+
+    const char *bad_type_bogus = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":704,\"type\":\"bogus\"}\n";
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    bad_type_bogus, (int)strlen(bad_type_bogus),
+                                                    0, (int)strlen(bad_type_bogus));
+    assert(!ok); /* Rejected: unrecognized type */
+    assert(s_rx_callback_invocations == 2);
+
+    mgr.mqtt_transport.ops->get_stats(&mgr.mqtt_transport, &mstats);
+    assert(mstats.rx_errors == 2);
+
+    /* 4. Protocol version enforcement: version != NEXUS_PROTOCOL_VERSION rejected */
+    const char *bad_ver_2 = "{\"ver\":2,\"dev\":\"ground_station\",\"seq\":705,\"type\":\"cmd\"}\n";
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    bad_ver_2, (int)strlen(bad_ver_2),
+                                                    0, (int)strlen(bad_ver_2));
+    assert(!ok); /* Rejected: unsupported version 2 */
+    assert(s_rx_callback_invocations == 2);
+
+    const char *bad_ver_0 = "{\"ver\":0,\"dev\":\"ground_station\",\"seq\":706,\"type\":\"cmd\"}\n";
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    bad_ver_0, (int)strlen(bad_ver_0),
+                                                    0, (int)strlen(bad_ver_0));
+    assert(!ok); /* Rejected: version 0 invalid */
+    assert(s_rx_callback_invocations == 2);
+
+    mgr.mqtt_transport.ops->get_stats(&mgr.mqtt_transport, &mstats);
+    assert(mstats.rx_errors == 4);
+
+    /* 5. Malformed JSON and missing required fields */
+    /* Missing "ver" */
+    const char *malformed_no_ver = "{\"dev\":\"ground_station\",\"seq\":707,\"type\":\"cmd\"}\n";
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    malformed_no_ver, (int)strlen(malformed_no_ver),
+                                                    0, (int)strlen(malformed_no_ver));
+    assert(!ok);
+    assert(s_rx_callback_invocations == 2);
+
+    /* Broken syntax */
+    const char *malformed_syntax = "{\"ver\":1,\"seq\":708,\"broken";
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    malformed_syntax, (int)strlen(malformed_syntax),
+                                                    0, (int)strlen(malformed_syntax));
+    assert(!ok);
+    assert(s_rx_callback_invocations == 2);
+
+    mgr.mqtt_transport.ops->get_stats(&mgr.mqtt_transport, &mstats);
+    assert(mstats.rx_errors == 6);
+
+    /* 6. Payload boundary limits: 255 bytes accepted, 256 bytes rejected */
+    /* Syntactically valid 255-byte command envelope */
+    char valid_255[256];
+    int p1 = snprintf(valid_255, sizeof(valid_255), "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":730,\"type\":\"cmd\",\"pad\":\"");
+    int pad_len = 255 - p1 - 3;
+    memset(valid_255 + p1, 'X', pad_len);
+    valid_255[p1 + pad_len] = '\"';
+    valid_255[p1 + pad_len + 1] = '}';
+    valid_255[p1 + pad_len + 2] = '\n';
+    valid_255[255] = '\0';
+    assert(strlen(valid_255) == 255);
+
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    valid_255, 255, 0, 255);
+    assert(ok); /* Accepted: exactly 255 bytes */
+    assert(s_rx_callback_invocations == 3);
+    assert(s_last_received_seq == 730);
+    assert(s_last_received_type == NEXUS_MSG_TYPE_COMMAND);
+
+    /* 256-byte payload (rejection threshold) */
+    char invalid_256[257];
+    int p2 = snprintf(invalid_256, sizeof(invalid_256), "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":731,\"type\":\"cmd\",\"pad\":\"");
+    pad_len = 256 - p2 - 3;
+    memset(invalid_256 + p2, 'X', pad_len);
+    invalid_256[p2 + pad_len] = '\"';
+    invalid_256[p2 + pad_len + 1] = '}';
+    invalid_256[p2 + pad_len + 2] = '\n';
+    invalid_256[256] = '\0';
+    assert(strlen(invalid_256) == 256);
+
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    invalid_256, 256, 0, 256);
+    assert(!ok); /* Rejected: >= 256 bytes */
+    assert(s_rx_callback_invocations == 3);
+
+    /* Oversized (300 bytes) */
+    char oversized[300];
+    memset(oversized, 'A', sizeof(oversized));
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    oversized, 100, 0, 300);
+    assert(!ok); /* Rejected */
+    assert(s_rx_callback_invocations == 3);
+
+    mgr.mqtt_transport.ops->get_stats(&mgr.mqtt_transport, &mstats);
+    assert(mstats.rx_errors == 8);
+
+    /* 7. Empty payloads and invalid fragment offsets/lengths */
+    /* Empty chunk */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg1, 0, 0, msg1_len);
+    assert(!ok);
+    /* total_len = 0 */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg1, msg1_len, 0, 0);
+    assert(!ok);
+    /* Negative offset */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg1, msg1_len, -1, msg1_len);
+    assert(!ok);
+    /* Bounds overflow (offset + len > total) */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg1, 30, 20, 40);
+    assert(!ok);
+
+    /* 8. Wrong topic handling */
+    const char *wrong_topic = "nexus/nexus_esp32/telemetry";
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    wrong_topic, (int)strlen(wrong_topic),
+                                                    msg1, msg1_len, 0, msg1_len);
+    assert(!ok); /* Rejected due to unexpected topic */
+    assert(s_rx_callback_invocations == 3);
+
+    /* 9. Duplicate inbound messages and source-aware deduplication */
+    const char *msg_dup = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":710,\"type\":\"cmd\"}\n";
+    int msg_dup_len = (int)strlen(msg_dup);
+
+    /* First arrival over MQTT: accepted */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg_dup, msg_dup_len, 0, msg_dup_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 4);
+    assert(s_last_received_seq == 710);
+    assert(s_last_received_type == NEXUS_MSG_TYPE_COMMAND);
+    assert(mgr.dedup.duplicates_detected == 0);
+
+    /* Duplicate arrival over MQTT: suppressed */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg_dup, msg_dup_len, 0, msg_dup_len);
+    assert(!ok); /* Rejected as duplicate */
+    assert(s_rx_callback_invocations == 4); /* NOT called again */
+    assert(mgr.dedup.duplicates_detected == 1);
+
+    /* Same sequence number (710) arriving over SERIAL: accepted (distinct source) */
+    bool serial_ok = nexus_conn_mgr_process_rx(&mgr, NEXUS_TRANSPORT_TYPE_SERIAL,
+                                               (const uint8_t *)msg_dup, (size_t)msg_dup_len);
+    assert(serial_ok);
+    assert(s_rx_callback_invocations == 5);
+    assert(s_last_received_source == NEXUS_TRANSPORT_TYPE_SERIAL);
+    assert(s_last_received_seq == 710);
+    assert(s_last_received_type == NEXUS_MSG_TYPE_COMMAND);
+    assert(mgr.dedup.duplicates_detected == 1);
+
+    /* 10. Fragment error recovery: gap, overlap, interruption, restart */
+    /* 10a. Gap offset rejection */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg2, 20, 0, msg2_len);
+    assert(ok);
+    /* Send gap offset: expected 20, send 35 */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    NULL, 0,
+                                                    msg2 + 20, 20, 35, msg2_len);
+    assert(!ok); /* Rejected */
+
+    /* Verify subsequent fresh message succeeds (clean recovery) */
+    const char *msg_recovery = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":720,\"type\":\"cmd\"}\n";
+    int msg_recovery_len = (int)strlen(msg_recovery);
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg_recovery, msg_recovery_len, 0, msg_recovery_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 6);
+    assert(s_last_received_seq == 720);
+
+    /* 10b. Overlapping offset rejection */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg2, 20, 0, msg2_len);
+    assert(ok);
+    /* Send overlapping offset: expected 20, send 15 */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    NULL, 0,
+                                                    msg2 + 15, 20, 15, msg2_len);
+    assert(!ok); /* Rejected */
+
+    /* Recovery after overlap */
+    const char *msg_overlap_rec = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":722,\"type\":\"cmd\"}\n";
+    int msg_overlap_rec_len = (int)strlen(msg_overlap_rec);
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg_overlap_rec, msg_overlap_rec_len, 0, msg_overlap_rec_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 7);
+    assert(s_last_received_seq == 722);
+
+    /* 10c. Interrupted message */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg2, 20, 0, msg2_len);
+    assert(ok);
+    /* New start fragment interrupts previous assembly */
+    const char *msg_interrupted = "{\"ver\":1,\"dev\":\"ground_station\",\"seq\":721,\"type\":\"cmd\"}\n";
+    int msg_interrupted_len = (int)strlen(msg_interrupted);
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg_interrupted, msg_interrupted_len, 0, msg_interrupted_len);
+    assert(ok);
+    assert(s_rx_callback_invocations == 8);
+    assert(s_last_received_seq == 721);
+
+    /* 10d. Disconnect/stop reset */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    cmd_topic, cmd_topic_len,
+                                                    msg2, 20, 0, msg2_len);
+    assert(ok);
+    assert(nexus_conn_mgr_stop(&mgr));
+    assert(nexus_conn_mgr_start(&mgr));
+    nexus_wifi_mqtt_mock_set_connected(&mgr.mqtt_transport, true);
+
+    /* Sending continuation fragment without start after restart must be rejected */
+    ok = nexus_wifi_mqtt_transport_process_rx_chunk(&mgr.mqtt_transport,
+                                                    NULL, 0,
+                                                    msg2 + 20, 25, 20, msg2_len);
+    assert(!ok);
+
+    assert(nexus_conn_mgr_stop(&mgr));
+    printf("  [PASS] MQTT Inbound Receive Path: validation, fragmentation, and deduplication\n");
+}
+
+static void test_telemetry_schema_and_dht_validity(void)
+{
+    printf("  [TEST] Telemetry schema compatibility: omitted temp/hum vs valid dht11...\n");
+    nexus_conn_mgr_t mgr;
+    assert(nexus_conn_mgr_init(&mgr, NULL));
+
+    /* 1. Send telemetry with uninitialized/invalid DHT11 */
+    assert(nexus_conn_mgr_send_telemetry(&mgr, 366, 0, 3087, 0, 0, false, NEXUS_ROUTE_SERIAL_ONLY));
+    assert(mgr.tx_queue.count == 1);
+    nexus_envelope_t *env_invalid = &mgr.tx_queue.items[mgr.tx_queue.tail].envelope;
+    assert(env_invalid->type == NEXUS_MSG_TYPE_TELEMETRY);
+    assert(strstr((const char *)env_invalid->buffer, "\"dht_valid\":false") != NULL);
+    assert(strstr((const char *)env_invalid->buffer, "\"temp\"") == NULL);
+    assert(strstr((const char *)env_invalid->buffer, "\"hum\"") == NULL);
+    assert(strstr((const char *)env_invalid->buffer, "\"ldr\":0") != NULL);
+    assert(strstr((const char *)env_invalid->buffer, "\"x0\":3087") != NULL);
+
+    /* Verify header parser succeeds on this envelope */
+    uint32_t ver = 0, seq = 0;
+    char type_str[16] = {0};
+    assert(nexus_envelope_parse_header(env_invalid->buffer, env_invalid->length, &ver, &seq, type_str, sizeof(type_str)));
+    assert(ver == NEXUS_PROTOCOL_VERSION);
+    assert(strcmp(type_str, "telem") == 0);
+
+    /* 2. Send telemetry with valid DHT11 */
+    assert(nexus_conn_mgr_send_telemetry(&mgr, 2955, 350, 3087, 32, 52, true, NEXUS_ROUTE_SERIAL_ONLY));
+    assert(mgr.tx_queue.count == 2);
+    uint16_t next_idx = (mgr.tx_queue.tail + 1) % NEXUS_CONN_TX_QUEUE_CAPACITY;
+    nexus_envelope_t *env_valid = &mgr.tx_queue.items[next_idx].envelope;
+    assert(env_valid->type == NEXUS_MSG_TYPE_TELEMETRY);
+    assert(strstr((const char *)env_valid->buffer, "\"dht_valid\":true") != NULL);
+    assert(strstr((const char *)env_valid->buffer, "\"temp\":32") != NULL);
+    assert(strstr((const char *)env_valid->buffer, "\"hum\":52") != NULL);
+    assert(strstr((const char *)env_valid->buffer, "\"ldr\":350") != NULL);
+    assert(strstr((const char *)env_valid->buffer, "\"x0\":3087") != NULL);
+
+    assert(nexus_envelope_parse_header(env_valid->buffer, env_valid->length, &ver, &seq, type_str, sizeof(type_str)));
+    assert(ver == NEXUS_PROTOCOL_VERSION);
+    assert(strcmp(type_str, "telem") == 0);
+
+    printf("  [PASS] Telemetry schema compatibility: omitted temp/hum vs valid dht11\n");
+}
+
 int main(void)
 {
     printf("====================================================\n");
@@ -728,6 +1113,8 @@ int main(void)
     test_start_rejected_when_worker_terminating();
     test_executive_timing_isolation();
     test_executive_and_sensors_integration();
+    test_mqtt_inbound_rx_and_fragmentation();
+    test_telemetry_schema_and_dht_validity();
 
     printf("====================================================\n");
     printf("ALL MILESTONE 4 HOST UNIT TESTS PASSED SUCCESSFULLY!\n");

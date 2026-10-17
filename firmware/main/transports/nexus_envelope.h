@@ -44,7 +44,8 @@ bool nexus_envelope_format_telemetry(nexus_envelope_t *env,
                                      int32_t ldr_raw,
                                      int32_t mux_x0_raw,
                                      int32_t dht_temp,
-                                     int32_t dht_hum);
+                                     int32_t dht_hum,
+                                     bool dht_valid);
 
 bool nexus_envelope_format_event(nexus_envelope_t *env,
                                  uint32_t seq,
@@ -82,6 +83,7 @@ bool nexus_envelope_parse_header_ext(const uint8_t *data,
                                      size_t type_buf_len);
 
 const char *nexus_msg_type_str(nexus_msg_type_t type);
+bool nexus_envelope_parse_type(const char *type_str, nexus_msg_type_t *out_type);
 
 #ifdef __cplusplus
 }

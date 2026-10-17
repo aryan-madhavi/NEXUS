@@ -28,11 +28,28 @@ bool nexus_wifi_mqtt_transport_init(nexus_transport_t *transport, const nexus_wi
 /* Exponential backoff calculation helper (host-testable) */
 uint32_t nexus_wifi_mqtt_compute_next_backoff(uint32_t current_ms, uint32_t max_ms);
 
+#define NEXUS_MQTT_MAX_RX_ENVELOPE_LEN 256U
+
+typedef bool (*nexus_wifi_mqtt_rx_handler_t)(void *user_ctx, const uint8_t *data, size_t len);
+
+void nexus_wifi_mqtt_transport_set_rx_handler(nexus_transport_t *transport,
+                                              nexus_wifi_mqtt_rx_handler_t handler,
+                                              void *user_ctx);
+
+bool nexus_wifi_mqtt_transport_process_rx_chunk(nexus_transport_t *transport,
+                                                const char *topic,
+                                                int topic_len,
+                                                const char *data,
+                                                int data_len,
+                                                int current_data_offset,
+                                                int total_data_len);
+
 #ifndef ESP_PLATFORM
 /* Mock hooks for host unit testing */
 void nexus_wifi_mqtt_mock_set_connected(nexus_transport_t *transport, bool connected);
 void nexus_wifi_mqtt_mock_set_fail(nexus_transport_t *transport, bool fail);
 size_t nexus_wifi_mqtt_mock_get_tx(nexus_transport_t *transport, uint8_t *out_buf, size_t max_len);
+void nexus_wifi_mqtt_mock_reset_rx(nexus_transport_t *transport);
 #endif
 
 #ifdef __cplusplus

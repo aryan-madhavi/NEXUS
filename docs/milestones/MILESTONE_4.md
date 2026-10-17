@@ -250,7 +250,7 @@ stateDiagram-v2
       firmware/main/transports/*.c tests/test_milestone4_host.c \
       -o tests/test_milestone4_host
   ```
-- **Results**: **10/10 Test Groups Passed (100%)**
+- **Results**: **13/13 Test Groups Passed (100%)**
 
 | Test Group | Production Functions Exercised | Observed Result |
 |---|---|---|
@@ -262,8 +262,11 @@ stateDiagram-v2
 | `test_f02_composite_deduplication_and_isolation` | `nexus_conn_mgr_is_duplicate`, `record_seq`, `reset_dedup` | **PASS**: Genuine duplicates on same transport suppressed; distinct transports sharing sequence numbers accepted; distinct `dev` identities accepted; 32-entry sliding window eviction verified; sequence restart reset verified. |
 | `test_f04_reconnect_backoff_calculation` | `nexus_wifi_mqtt_compute_next_backoff` | **PASS**: Verified geometric progression $1000 \to 2000 \to 4000 \to 8000 \to 16000 \to 32000 \to 60000$ ms, ceiling clamp, zero input, and integer overflow guard. |
 | `test_f05_f06_unconfigured_defaults_and_lifecycle` | `nexus_conn_mgr_init`, `start`, `stop` | **PASS**: Empty SSID starts safely in serial-only fallback without hanging; repeated stop is safe and idempotent; worker self-stop is rejected; stop timeout preserves handle for retry; startup failure cleanly rolls back started transports; queue drain yields immediately when stopping. |
-| `test_executive_timing_isolation` | `nexus_conn_mgr_enqueue` benchmark | **PASS**: Enqueue duration measured at **89 ns/op** on Linux x86_64 host without sanitizers, and **583 ns/op** under ASan/UBSan (safely $< 50\ \mu\text{s}$). Sub-3-µs duration on ESP32 at 240 MHz is an analytical instruction-budget estimate pending target trace verification. |
+| `test_start_rejected_when_worker_terminating` | `nexus_conn_mgr_start` worker handle guard | **PASS**: Start rejected when previous worker task handle is still active / terminating. |
+| `test_executive_timing_isolation` | `nexus_conn_mgr_enqueue` benchmark | **PASS**: Enqueue duration measured at **64 ns/op** on Linux x86_64 host without sanitizers, and **597 ns/op** under ASan/UBSan (safely $< 50\ \mu\text{s}$). Sub-3-µs duration on ESP32 at 240 MHz is an analytical instruction-budget estimate pending target trace verification. |
 | `test_executive_and_sensors_integration` | End-to-end executive ticks with queue drain | **PASS**: Executive completed 60 ticks with `deadline_misses == 0` and `jobs_failed == 0`. |
+| `test_mqtt_inbound_rx_and_fragmentation` | `nexus_wifi_mqtt_transport_process_rx_chunk`, `nexus_conn_mgr_process_rx` | **PASS**: Verified single-chunk complete message, multi-fragment reassembly (ESP-IDF topic-on-first-chunk semantics), oversized payload rejection ($\ge 256$ B), malformed JSON syntax/missing fields rejection, invalid offsets/bounds/empty payloads, wrong topic rejection, MQTT duplicate suppression with cross-transport serial isolation, exactly-once callback invocation, and assembly buffer reset on gap, interruption, and restart. |
+| `test_telemetry_schema_and_dht_validity` | `nexus_envelope_format_telemetry`, `nexus_conn_mgr_send_telemetry`, `nexus_envelope_parse_header_ext` | **PASS**: When `dht_valid == false`, `"temp"` and `"hum"` are completely omitted from JSON and `"dht_valid":false` is emitted; when `dht_valid == true`, both fields are present with `"dht_valid":true`; header parsing succeeds for both schemas; queueing verified without corruption. |
 
 ### 8.2 Sanitizer Verification (ASan & UBSan)
 - **Compiler**: Clang with `-fsanitize=address,undefined`
@@ -276,14 +279,19 @@ stateDiagram-v2
       firmware/main/transports/*.c tests/test_milestone4_host.c \
       -o tests/test_milestone4_host_san && ./tests/test_milestone4_host_san
   ```
-- **Outcome**: **10/10 Test Groups Passed with ZERO errors, ZERO memory leaks, and ZERO undefined behaviors**. Confirms bounded scratch buffer handling and pointer arithmetic are completely memory-safe.
+- **Outcome**: **13/13 Test Groups Passed with ZERO errors, ZERO memory leaks, and ZERO undefined behaviors**. Confirms bounded scratch buffer handling and pointer arithmetic are completely memory-safe.
 
 ### 8.3 Firmware Build Validation
 - **Environment**: Native ESP-IDF v6.0.1 on Fedora Linux (`activate_idf_v6.0.1.sh`).
-- **Binary**: `firmware/build/nexus.bin`
-- **SHA-256 Checksum**: `f5b5f4765cb764755b9e78cbaf49bb069163a7d94b7b2ae8c7c677b722e7b8d0`
-- **Binary Size**: `0xdd810` bytes (907,280 bytes / 886 KB).
-- **Partition Fit**: Smallest partition is `0x100000` (1024 KB); `0x227f0` bytes (13%) free.
+- **Build Configuration**: Local ignored configuration (`credentials/sdkconfig.local`) and dedicated build directory (`build/`).
+- **Build Command**:
+  ```bash
+  idf.py -DSDKCONFIG=/home/aryan/Projects/SPIT/NEXUS/credentials/sdkconfig.local -B ../build build
+  ```
+- **Binary**: `build/nexus.bin`
+- **SHA-256 Checksum**: `fa9b9c92976b27490e7bece4fc1a0b23b12027a28b8df2d8eee7e4dd4502cbac`
+- **Binary Size**: `0xdf0f0` bytes (913,648 bytes / 892 KB).
+- **Partition Fit**: Smallest app partition is `0x100000` (1024 KB); `0x20f10` bytes (135,440 bytes / 13%) free headroom.
 - **Compiler Warnings / Errors**: **0 warnings, 0 errors**.
 
 ---
@@ -308,15 +316,29 @@ All six audit findings (F-01 through F-06) and the worker-task lifecycle protoco
 To maintain absolute documentation integrity, the status of Milestone 4 is categorized below:
 
 ### 10.1 Verified & Established Facts
-1. **Source Code Remediated & Worker Task Protected**: All six audit items (F-01 through F-06) and the worker-task lifecycle protocol are implemented and verified.
-2. **Host Unit Tests Expanded & Passing**: All 11 test groups in `tests/test_milestone4_host.c` pass with 100% success. Enqueue benchmarks confirm non-blocking operation (measured at **89 ns/op** on host without sanitizers, **583 ns/op** under ASan). Sub-3-µs duration on ESP32 is an analytical estimate.
-3. **Memory Safety & Sanitizers Verified**: Tested under Clang with `-fsanitize=address,undefined` with zero warnings, zero leaks, and zero memory corruption.
-4. **All Regression Suites Passing**: Milestone 2 host tests (5/5), Milestone 3 host tests (9/9), and Milestone 4 host tests (11/11) all pass concurrently (25/25 total test groups).
-5. **Firmware Compilation Verified**: ESP-IDF v6.0.1 builds `nexus.bin` (SHA-256 `f5b5f4765cb764755b9e78cbaf49bb069163a7d94b7b2ae8c7c677b722e7b8d0`, 886 KB) with zero warnings and zero errors.
+1. **Source Code Remediated & Hardened**: All six audit items (F-01 through F-06), worker-task lifecycle protocol, MQTT inbound receive-path reassembly, DHT11 atomic bit timing, and startup telemetry schema validity are implemented and verified.
+2. **Host Unit Tests Expanded & Passing**: All 13 test groups in `tests/test_milestone4_host.c` pass with 100% success. Enqueue benchmarks confirm non-blocking operation (measured at **64 ns/op** on host without sanitizers, **597 ns/op** under ASan). Sub-3-µs duration on ESP32 is an analytical estimate.
+3. **Memory Safety & Sanitizers Verified**: Tested under Clang with `-fsanitize=address,undefined` with zero warnings, zero leaks, and zero memory corruption across all test suites.
+4. **All Regression Suites Passing**: Milestone 2 host tests (5/5), Milestone 3 host tests (11/11), and Milestone 4 host tests (13/13) all pass concurrently (**29/29 total test groups**).
+5. **Firmware Compilation Verified**: ESP-IDF v6.0.1 builds `build/nexus.bin` (SHA-256 `fa9b9c92976b27490e7bece4fc1a0b23b12027a28b8df2d8eee7e4dd4502cbac`, 913,648 bytes, 13% free headroom) with zero warnings and zero errors.
 
-### 10.2 What Remains Unresolved & Pending (Hardware-Only)
-1. **Hardware Flashing Pending**: The ESP32 hardware (`/dev/ttyUSB0`) has **NOT been flashed** with Milestone 4 firmware, in strict compliance with the scope boundary.
-2. **Physical Radio Validation Pending**: Live 2.4 GHz Wi-Fi association, DHCP negotiation with a physical router, and TCP/IP MQTT broker publish/subscribe over the air have not been physically observed on real hardware.
+### 10.2 Physical Hardware Validation Status
+1. **Milestone 4 Serial-Only Baseline**: **PASSED (ACCEPT)**. Flashed and validated on hardware (`milestone4_postfix_hardware_validation_20261016_220741.log`): 162/162 valid JSON envelopes, zero drops, flat heap (254 KB free), and zero deadline misses (`dline_misses=0`, `max_dur_us=44.37 ms`).
+2. **Milestone 4.1B Wi-Fi Diagnostics**: **VERIFIED ON HARDWARE** (`milestone4_1b_wifi_diagnostics.log`). Disconnect reasons (15 [4WAY_HANDSHAKE_TIMEOUT], 205 [CONNECTION_FAIL], 2 [AUTH_EXPIRE]) and exponential backoff progression (1s to 32s) confirmed on hardware.
+3. **Milestone 4.1B Live Wi-Fi & MQTT Connection**: **VERIFIED ON HARDWARE** (`dht11_physical_validation.log`). Associated with AP "Aryan" at RSSI -45 dBm, obtained IP `10.12.252.214`, connected to MQTT broker at uptime 2825 ms, acquired 16 valid DHT11 readings (`temp=32°C, hum=52%`), zero deadline misses, and zero dropped envelopes.
+4. **Milestone 4.1C Hardware Revalidation Audit**: **VERIFIED ON HARDWARE** (`milestone4_1c_hardware_validation.log`, `milestone4_1c_mqtt_telemetry.log`). Flashed binary `build/nexus.bin` (SHA-256 `fa9b9c92...`). Proved cold-boot telemetry omits `temp`/`hum` with `dht_valid:false`, subsequent samples emit numeric `32°C` and `56%–57% RH` with `dht_valid:true`, zero executive deadline misses (`dline_misses=0`), zero queue overflows (`q_overflows=0`), zero dropped transmissions (`tx_drop=0`), and zero crashes over an 81.1-second physical run. 4 isolated data bit timeouts occurred under active Wi-Fi (88.89% driver success rate across 36 logged attempts; 89.74% valid post-initial telemetry envelopes). Note: telemetry frames sample the registry asynchronously and do not map 1-to-1 to physical attempts; final queue emptiness at capture termination remains unobserved.
+
+### 10.3 Milestone 4.1 Remediation Summary
+
+Following Milestone 4 acceptance, three targeted follow-up remediations were completed:
+- **Milestone 4.1A (Inbound MQTT Receive Path)**: Fixed fall-through in `MQTT_EVENT_DATA`; implemented bounded 256-byte reassembly buffer, offset continuity checks, strict topic filtering on `<topic_prefix>/cmd`, message type enforcement (`NEXUS_MSG_TYPE_COMMAND`), and composite deduplication integration.
+- **Milestone 4.1B (Wi-Fi Disconnect Diagnostics)**: Added structured reason code logging (reason 15, 205, 2) and RSSI reporting in `WIFI_EVENT_STA_DISCONNECTED`, verifying exponential backoff and network isolation.
+- **Milestone 4.1C (DHT11 Pulse Timing & Startup Telemetry)**:
+  - Fixed FreeRTOS tick boundary undershoot via `vTaskDelay(pdMS_TO_TICKS(20) + 1)` guaranteeing $\ge 18\text{ ms}$ start pulse.
+  - Replaced push-pull drive with `GPIO_MODE_INPUT_OUTPUT_OD` and internal pull-up.
+  - Eliminated frame-wide spinlock; introduced static `s_dht11_spinlock` and atomic dual-edge measurement bounded to $\le 175\ \mu\text{s}$ worst-case.
+  - Implemented safe read API (`nexus_dht11_read_with_status`, `NEXUS_DHT11_STATUS_INVALID_ARG`) and removed fake sample event emission on failure.
+  - Gated telemetry fields on genuine sample validity (`sample_count > 0 && VALID && !ERROR`). Added `dht_valid` boolean flag; when false, `"temp"` and `"hum"` are completely omitted from JSON to eliminate startup zeros.
 
 ---
 

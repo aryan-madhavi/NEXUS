@@ -15,6 +15,14 @@ extern "C" {
 #define NEXUS_DHT11_INTERVAL_MS 2000U /* DHT11 hardware requires >= 1.5-2.0s between reads */
 #define NEXUS_DHT11_TIMEOUT_US  120U  /* Max microsecond timeout per transition */
 
+typedef enum {
+    NEXUS_DHT11_STATUS_OK = 0,
+    NEXUS_DHT11_STATUS_TIMEOUT_HANDSHAKE,
+    NEXUS_DHT11_STATUS_TIMEOUT_DATA,
+    NEXUS_DHT11_STATUS_ERROR_CHECKSUM,
+    NEXUS_DHT11_STATUS_INVALID_ARG,
+} nexus_dht11_status_t;
+
 typedef struct {
     int16_t temperature_c; /* Integer °C */
     uint16_t humidity_pct; /* Integer % RH */
@@ -23,6 +31,9 @@ typedef struct {
 
 /* Initialize GPIO 19 and register DHT11 temperature and humidity in sensor registry. */
 bool nexus_dht11_init(nexus_sensor_registry_t *registry);
+
+/* Bounded bit-bang read from GPIO 19 with detailed status output. */
+bool nexus_dht11_read_with_status(nexus_dht11_reading_t *out_reading, nexus_dht11_status_t *out_status);
 
 /* Bounded bit-bang read from GPIO 19.
  * Returns true on valid packet and checksum match; false on timeout or CRC error. */

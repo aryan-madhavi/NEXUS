@@ -30,7 +30,10 @@ timeline
     2026-10-16 : Milestone 3.1 : Decoupled dispatch latency from execution budget
                : 70-second cold-boot hardware validation baseline
                : Milestone 4 : Unified Connection Manager, Protocol v1 Envelopes, Dual-Link Transports
-               : Milestone 4 Remediation : Fixed F-01..F-06; 10/10 host tests (ASan/UBSan), ESP-IDF build clean
+               : Milestone 4 Hardware : Serial-only 95s validation; F-01..F-06 remediated
+    2026-10-17 : Milestone 4.1 : Inbound MQTT receive path, Wi-Fi disconnect diagnostics, live AP/broker connection
+               : Milestone 4.1 Remediation : DHT11 atomic bit timing, safe API, startup telemetry schema validity
+               : 29/29 Host Tests (ASan/UBSan clean) : ESP-IDF v6.0.1 build clean
 ```
 
 ---
@@ -129,16 +132,16 @@ $$\text{deadline\_misses} \equiv 0 \quad (\forall \tau_{\text{callback}} \le \te
 
 ## 4. Architectural Summary Across Milestones
 
-| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 |
-|---|---|---|---|---|---|
-| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated |
-| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
-| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots |
-| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots |
-| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) |
-| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) |
-| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) |
-| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) |
-| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` |
-| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed (ASan/UBSan clean) |
-| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | Pending hardware flash authorization |
+| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 |
+|---|---|---|---|---|---|---|
+| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated |
+| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
+| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots |
+| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots |
+| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) |
+| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) |
+| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) |
+| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) |
+| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` |
+| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 29/29 total (13/13 M4, 11/11 M3, 5/5 M2; ASan/UBSan clean) |
+| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | Wi-Fi/MQTT diagnostics & connection verified; pre-flash build ready |

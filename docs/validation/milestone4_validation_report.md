@@ -185,3 +185,263 @@ Following the logging streamlining fix in `firmware/main/app_main.c`, the ESP32 
 - **Transport Verification**: **PASS**. 162/162 envelopes delivered over USB serial with perfect sequence ordering, 0 drops, and 0 failures.
 - **Caveat 1 (Sensor Reading Anomaly)**: CD4051/HW-870 analog readings remain anomalous and unresolved pending physical electrical measurement with a multimeter.
 - **Caveat 2 (Network Transports)**: Wi-Fi and MQTT transports have not been physically validated on air/live network; only USB serial and unconfigured idle fallback have been validated.
+
+---
+
+## 10. Milestone 4.1A — MQTT Inbound Receive-Path Remediation (Host / Build Stage)
+
+### 10.1 Root Cause & Architectural Gap
+During the Milestone 4.1 readiness audit, an architectural gap was identified in `firmware/main/transports/nexus_wifi_mqtt_transport.c`:
+- Although `mqtt_event_handler` subscribed to `<topic_prefix>/cmd` upon `MQTT_EVENT_CONNECTED`, it fell through to `default: break;` on `MQTT_EVENT_DATA`.
+- Inbound MQTT payload data was never extracted, reassembled, or forwarded to `nexus_conn_mgr_process_rx()`.
+- Furthermore, incoming MQTT payloads are not NUL-terminated by ESP-MQTT and may arrive fragmented across multiple `MQTT_EVENT_DATA` events with `current_data_offset`, `data_len`, and `total_data_len` metadata.
+
+### 10.2 Implemented Inbound Architecture
+The smallest correct fix was implemented without redesigning transport abstractions:
+1. **Bounded Storage**: Added static 256-byte reassembly buffer (`uint8_t buffer[NEXUS_MQTT_MAX_RX_ENVELOPE_LEN]`, matching `NEXUS_ENVELOPE_MAX_LEN`) in transport context. Zero dynamic heap allocation.
+2. **ESP-MQTT Fragmentation Reassembly**:
+   - Single-chunk (`offset == 0 && data_len == total_data_len`) and multi-fragment streams are assembled in-place.
+   - For `offset == 0`, topic is validated against `<topic_prefix>/cmd`. Unexpected topics are discarded (`rx_errors++`).
+   - For `offset > 0`, ESP-IDF provides `topic == NULL`; verified against active assembly state, offset continuity (`current_data_offset == received_bytes`), and declared total length.
+   - Gaps, overlaps, out-of-order chunks, or orphaned continuations immediately discard assembly state and increment `rx_errors++`.
+   - Interrupted messages (new `offset == 0` while previous assembly active) cleanly reset and start new assembly with diagnostic warning.
+3. **Strict Boundary Rejection**: Any payload declaring `total_data_len >= 256` bytes is rejected immediately prior to buffer copy.
+4. **Clean Disconnect / Stop Reset**: Buffer and assembly state are wiped on `wifi_mqtt_stop()` and `MQTT_EVENT_DISCONNECTED`, preventing stale fragments across network interruptions.
+5. **Decoupled Delivery**: Complete message is safely NUL-terminated on stack and dispatched outside critical section to `nexus_conn_mgr_process_rx()` via trampoline.
+6. **Composite Deduplication & Dispatch**: `nexus_conn_mgr_process_rx()` verifies header framing, checks `(MQTT, dev, seq)` composite deduplication, updates dedup history, and forwards to registered `rx_cb`.
+7. **No Arbitrary Command Execution**: Receiving a command envelope does NOT trigger hardware actions or execute code; command handling remains bounded to protocol validation and dispatch.
+
+### 10.3 Inbound Message Type & Protocol Version Contract
+In accordance with the NEXUS protocol contract and Milestone 4.1A targeted remediation:
+- **Strict Protocol Versioning**: `nexus_conn_mgr_process_rx()` enforces `ver == NEXUS_PROTOCOL_VERSION` (1). Unsupported protocol versions (e.g., `ver: 0` or `ver: 2`) are rejected immediately.
+- **Ingress Message Type Validation**: Inbound MQTT payloads on `<topic_prefix>/cmd` must possess a valid message type mapping to `NEXUS_MSG_TYPE_COMMAND` (accepting `"cmd"` or `"command"`). Telemetry (`"telem"`), heartbeats (`"hb"`), status, events, and unknown strings (`"bogus"`) are rejected on the `/cmd` topic.
+- **Accurate Envelope Type Representation**: When `nexus_conn_mgr_process_rx()` dispatches to `rx_cb`, `env.type` is explicitly populated with the validated `nexus_msg_type_t` (`NEXUS_MSG_TYPE_COMMAND`), rather than leaving it as default heartbeat.
+- **Passive Ingress**: The receive path is strictly passive. No command execution, GPIO actuation, or hardware side effects are performed.
+
+### 10.4 Concurrency & Spinlock Critical-Section Optimization
+- **Critical Section Reduction**: String parsing and envelope header inspection (`nexus_envelope_parse_header_ext()`, `nexus_envelope_parse_type()`) are executed outside `WIFI_MQTT_LOCK()`.
+- **State Recheck Under Lock**: During continuation chunk processing, assembly state (`in_progress`, `received_bytes`, `expected_total`) is verified under `WIFI_MQTT_LOCK()` before copying bytes into the assembly buffer.
+- **Diagnostic Logging**: `ESP_LOGW` invocations and formatted warnings are performed outside spinlock critical sections.
+
+### 10.5 MQTT Shutdown Lifecycle Corrections
+- **Lifecycle Tracking**: `esp_wifi_mqtt_ctx_t` tracks `mqtt_started` independently of broker connection state (`mqtt_connected`).
+- **Clean Shutdown**: `wifi_mqtt_stop()` halts `esp_mqtt_client` whenever `mqtt_started` is true, ensuring clients in connecting or disconnected states are cleanly stopped without resource leaks. Event handlers are unregistered, and the transport pointer `s_active_transport` is cleared under lock.
+
+### 10.6 Verification & Evidence (Host / Build)
+- **Host Unit Test Suite**: `tests/test_milestone4_host.c` (`test_mqtt_inbound_rx_and_fragmentation()`):
+  1. Valid command envelope (`type: "cmd"`) dispatches to `rx_cb` with `env.type == NEXUS_MSG_TYPE_COMMAND`: **PASS**.
+  2. Invalid message types on `/cmd` (`type: "telem"`, `type: "bogus"`) rejected with `rx_errors++`: **PASS**.
+  3. Unsupported protocol versions (`ver: 0`, `ver: 2`) rejected: **PASS**.
+  4. Max payload boundary: syntactically valid 255-byte envelope accepted; 256-byte payload rejected: **PASS**.
+  5. Multi-fragment message reassembly (3 chunks, 65 bytes) dispatches exactly once: **PASS**.
+  6. Fragment gap (expected 20, got 35) rejected with clean recovery: **PASS**.
+  7. Fragment overlap (expected 20, got 15) rejected with clean recovery: **PASS**.
+  8. Interrupted assembly (new start chunk during active assembly) resets and logs warning: **PASS**.
+  9. Continuation chunk received after disconnect/stop reset rejected: **PASS**.
+  10. Composite deduplication isolation: identical sequence number arriving on MQTT and Serial accepted as distinct sources; duplicate within same source suppressed: **PASS**.
+- **Sanitizer Verification**: 12/12 test groups passed with Clang AddressSanitizer and UndefinedBehaviorSanitizer (0 leaks, 0 errors, 0 UB).
+- **Regression Suites**: Milestone 2 (5/5) and Milestone 3 (9/9) host tests pass without regression (26/26 total test groups at Milestone 4.1A stage).
+- **Firmware Binary Size Accounting**:
+  - **Milestone 4 Historical Baseline (Serial-only post-fix)**: `907,248` bytes (`0xdd7f0`).
+  - **Intermediate Review Build**: `910,128` bytes (`0xde330`).
+  - **Milestone 4.1A Verified Build**: `910,496` bytes (`0xde4a0`), $+3,248$ bytes relative to baseline.
+  - Flash partition utilization: `0xde4a0` / `0x100000` (1,048,576 bytes app partition), leaving `138,080` bytes (13%) free.
+- **Subsequent Stages**: Proceeded to Milestone 4.1B physical diagnostics and Milestone 4.1C sensor/telemetry remediation below.
+
+---
+
+## 11. Milestone 4.1B — Physical Wi-Fi Diagnostics & Live Network Validation
+
+### 11.1 Context & Objectives
+Prior to live network testing, Wi-Fi association repeatedly disconnected before an IP address was obtained. Milestone 4.1B introduced non-intrusive diagnostic logging inside `WIFI_EVENT_STA_DISCONNECTED` in `firmware/main/transports/nexus_wifi_mqtt_transport.c` to capture exact numeric disconnect reason codes and RSSI values without altering network timing or behavior.
+
+### 11.2 Disconnect Diagnostics Hardware Evidence (`milestone4_1b_wifi_diagnostics.log`)
+A physical capture of the diagnostic firmware running on the ESP32 DevKit V1 established:
+1. **Identified Disconnect Reason Codes**:
+   - `reason=15 [4WAY_HANDSHAKE_TIMEOUT]`, `rssi=-85 dBm`: Observed at uptime 6115 ms and 15205 ms, proving authentication failure due to weak RF signal margins.
+   - `reason=205 [CONNECTION_FAIL]`, `rssi=-128 dBm`: Observed at uptime 9545 ms, 21635 ms, and 49095 ms, indicating transient AP scan/association failures.
+   - `reason=2 [AUTH_EXPIRE]`, `rssi=-86 dBm`: Observed at uptime 30675 ms.
+2. **Exponential Backoff Progression**:
+   - The hardware verified geometric backoff progression in real time:
+     $$1000\text{ ms} \to 2000\text{ ms} \to 4000\text{ ms} \to 8000\text{ ms} \to 16000\text{ ms} \to 32000\text{ ms}$$
+   - Proved that reconnection pacing functions on physical silicon without timer runaway or event loop lockups.
+3. **Serial Stream Isolation**:
+   - Throughout continuous Wi-Fi reconnect backoffs, executive scheduling and USB serial transmission operated without interruption, proving complete transport isolation.
+
+### 11.3 Live AP Association & MQTT Broker Hardware Evidence (`dht11_physical_validation.log`)
+Following environmental RF optimization (connecting to local 2.4 GHz AP "Aryan" at RSSI -45 dBm), a 35-second cold-boot hardware run was recorded:
+1. **System Boot**:
+   - `reset_reason=1` (`POWERON_RESET`). Bootloader ESP-IDF v6.0.1 loaded cleanly.
+   - Bootloader warning logged: `W (511) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.`
+2. **Network Connection**:
+   - Wi-Fi associated at uptime 935 ms (`rssi: -45 dBm`, WPA2-PSK, channel 11).
+   - DHCP IP acquired at uptime 1995 ms: `sta ip: 10.12.252.214, mask: 255.255.255.0, gw: 10.12.252.44`.
+   - Broker connection established at uptime 2825 ms: `I (2825) nexus_wifi_mqtt: MQTT connected to broker`.
+3. **Transport Routing & Queuing**:
+   - Under `NEXUS_ROUTE_AUTO`, the Connection Manager automatically switched telemetry dispatch from Serial to MQTT once MQTT connected. Serial JSON emission ceased after `seq=3`.
+   - Transmit queue delivered all packets with zero drops and zero failures: `tx_enq=51, tx_disp=51, tx_drop=0, tx_fail=0, q_depth=0, q_hwm=2`.
+4. **Physical Sensor Acquisition**:
+   - At uptime 865 ms, cold sensor startup produced one handshake timeout: `W (865) nexus_dht11: DHT11 read FAIL: handshake timeout (status=1, total_ok=0, total_err=1)`.
+   - At uptime 2955 ms, DHT11 produced its first successful sample: `I (2955) nexus_dht11: DHT11 read OK: temp=32°C, hum=52% (total_ok=1, total_err=1)`.
+   - By uptime 33655 ms, DHT11 achieved 16 consecutive successful reads: `(total_ok=16, total_err=1)`.
+5. **Executive Health & Memory Stability**:
+   - Executive deadline compliance: `dline_misses=0`, `max_dur_us=29738` (29.7 ms, well within the 50 ms budget).
+   - Startup quantization delay: `max_lat_us=100008` (consistent with 100 ms FreeRTOS tick quantization).
+   - Heap memory remained flat at ~194 KB free with lwIP, Wi-Fi, and MQTT active (**0 bytes leaked**).
+6. **Observed Startup Telemetry Defect**:
+   - At uptime 366 ms (before the first sensor sample completed at 2955 ms), the initial telemetry envelope serialized uninitialized values:
+     ```json
+     {"ver":1,"dev":"nexus_esp32","seq":3,"type":"telem","uptime":366,"ldr":0,"x0":3087,"temp":0,"hum":0}
+     ```
+   - Publishing fabricated `temp:0, hum:0` violated the project specification to distinguish uninitialized or missing data from valid zeros, prompting the Milestone 4.1C remediation.
+
+---
+
+## 12. Milestone 4.1C — DHT11 Pulse Timing, Safe API & Startup Telemetry Schema Remediation
+
+### 12.1 Source Implementation Details
+
+#### 1. DHT11 Start Pulse Timing Under FreeRTOS
+- **Root Cause**: `vTaskDelay(pdMS_TO_TICKS(20))` at 100 Hz tick frequency (`CONFIG_FREERTOS_HZ=100`) could wake up in as little as 10.1 ms if called just before a tick boundary, violating the DHT11 specification ($\ge 18\text{ ms}$).
+- **Resolution**: Replaced with `vTaskDelay(pdMS_TO_TICKS(20) + 1)` in `firmware/main/sensors/nexus_dht11.c`, guaranteeing an absolute minimum delay of $\ge 20.0\text{ ms}$ regardless of tick boundary alignment.
+
+#### 2. Open-Drain GPIO Line Driving
+- **Root Cause**: Reconfiguring GPIO 19 between push-pull output and floating input created electrical contention when the DHT11 pulled the line LOW during handshakes.
+- **Resolution**: Configured GPIO 19 permanently as `GPIO_MODE_INPUT_OUTPUT_OD` with internal pull-up enabled. The ESP32 drives the line LOW by writing 0 and releases it HIGH by writing 1, matching the 1-wire open-drain bus topology.
+
+#### 3. Bounded Dual-Edge Atomic Critical Section
+- **Root Cause**: Previously, a stack-allocated spinlock was held across the entire 4.5 ms frame, starving FreeRTOS interrupts. Moving the edge wait outside the critical section allowed interrupts to preempt between the rising edge and pulse measurement, shortening measured HIGH pulses and corrupting '1' bits into '0' bits.
+- **Resolution**:
+  - Replaced stack spinlock with static global `s_dht11_spinlock`.
+  - Atomically captured both the LOW pulse (50 µs nominal) and HIGH pulse (26–28 µs for '0', 70 µs for '1') inside a single tightly bounded critical section per bit:
+    - LOW phase timeout: `NEXUS_DHT11_BIT_LOW_TIMEOUT_US = 80U`
+    - HIGH phase timeout: `NEXUS_DHT11_BIT_HIGH_TIMEOUT_US = 95U`
+    - Maximum worst-case time inside critical section on a missing edge: $80 + 95 = 175\ \mu\text{s}$.
+  - Under normal conditions, critical section duration is ~78 µs for a '0' bit and ~120 µs for a '1' bit.
+  - $175\ \mu\text{s}$ represents $< 1.8\%$ of a 10 ms FreeRTOS tick slice, safely below the 300 ms ESP-IDF interrupt watchdog timeout.
+  - Replaced uncalibrated loop count busy-waits with `esp_timer_get_time()`.
+
+#### 4. Safe Read API & Error Classification
+- Added `nexus_dht11_status_t` (`NEXUS_DHT11_STATUS_OK`, `TIMEOUT_HANDSHAKE`, `TIMEOUT_DATA`, `ERROR_CHECKSUM`, `INVALID_ARG`).
+- Added `nexus_dht11_read_with_status()` in `firmware/main/sensors/nexus_dht11.h`.
+- Guaranteed `out_reading->valid = false` immediately at function entry, and returned `NEXUS_DHT11_STATUS_INVALID_ARG` on NULL input pointers.
+- Removed spurious `nexus_executive_emit_event(NEXUS_EVENT_TYPE_SENSOR_SAMPLE)` on read failure so neither event queue nor sensor history records fabricated samples.
+
+#### 5. Acquisition Cadence Contract
+- The background worker enforces a minimum interval of $\ge 2000\text{ ms}$ (`NEXUS_DHT11_INTERVAL_MS`) between physical acquisitions to prevent sensor self-heating.
+- This is a minimum separation contract; it does not claim exact millisecond periodicity due to FreeRTOS tick quantization and cooperative scheduler delays.
+
+#### 6. Startup Telemetry Schema & Validity Enforcement
+- **Root Cause**: `job_connection_telemetry` read `s_temp->latest_processed` and `s_hum->latest_processed` unconditionally, publishing default zeroes before any physical reading occurred.
+- **Resolution**:
+  - Gated temperature and humidity extraction in `firmware/main/app_main.c`:
+    ```c
+    if (s_temp->sample_count > 0 &&
+        (s_temp->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+        (s_temp->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0 &&
+        s_hum->sample_count > 0 &&
+        (s_hum->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+        (s_hum->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0) {
+        dht_temp = s_temp->latest_processed;
+        dht_hum = s_hum->latest_processed;
+        dht_valid = true;
+    }
+    ```
+  - Added `bool dht_valid` parameter to `nexus_envelope_format_telemetry()` and `nexus_conn_mgr_send_telemetry()`.
+  - When `dht_valid == false`, `"temp"` and `"hum"` are completely omitted from the JSON payload, and `"dht_valid":false` is emitted:
+    ```json
+    {"ver":1,"dev":"nexus_esp32","seq":1,"type":"telem","uptime":366,"ldr":0,"x0":3087,"dht_valid":false}
+    ```
+  - When `dht_valid == true`, both values are serialized with `"dht_valid":true`:
+    ```json
+    {"ver":1,"dev":"nexus_esp32","seq":2,"type":"telem","uptime":2955,"ldr":0,"x0":3087,"temp":32,"hum":52,"dht_valid":true}
+    ```
+  - The bounded envelope header parser (`nexus_envelope_parse_header_ext`) is schema-agnostic to payload keys; omitting fields preserves framing and sequence numbers without mutation or parser errors.
+
+### 12.2 Verification by Host Unit Tests
+- **Milestone 2 Host Suite (`tests/test_milestone2_host`)**: **5/5 Test Groups PASSED (100%)**.
+- **Milestone 3 Host Suite (`tests/test_milestone3_host`)**: **11/11 Test Groups PASSED (100%)**.
+  - Includes Group 6: DHT11 error classification, single publication, stale preservation, and recovery.
+  - Includes Group 7: DHT11 safe read API, invalid argument rejection, and uninitialized registry state.
+- **Milestone 4 Host Suite (`tests/test_milestone4_host`)**: **13/13 Test Groups PASSED (100%)**.
+  - Includes Group 12: Inbound MQTT receive path, multi-fragment reassembly, and composite dedup.
+  - Includes Group 13: Telemetry schema compatibility (omitted temp/hum vs valid dht11, header parsing, and TX queueing).
+- **Total Host Regression Suite**: **29/29 Test Groups PASSED**.
+- **Sanitizer Verification (ASan & UBSan)**:
+  - Both `test_milestone3_host_san` and `test_milestone4_host_san` passed with Clang `-fsanitize=address,undefined`: **ZERO memory leaks, ZERO buffer overflows, ZERO undefined behaviors**.
+
+### 12.3 Verification by Firmware Build
+- **Target & Toolchain**: Native ESP-IDF v6.0.1 on Fedora Linux (`activate_idf_v6.0.1.sh`).
+- **Configuration**: Dedicated build directory (`build/`) using local ignored configuration (`credentials/sdkconfig.local`).
+- **Build Command**:
+  ```bash
+  idf.py -DSDKCONFIG=/home/aryan/Projects/SPIT/NEXUS/credentials/sdkconfig.local -B ../build build
+  ```
+- **Build Artifact**: `build/nexus.bin`
+- **SHA-256 Checksum**: `fa9b9c92976b27490e7bece4fc1a0b23b12027a28b8df2d8eee7e4dd4502cbac`
+- **Binary Size**: `0xdf0f0` bytes (913,648 bytes / 892 KB).
+- **Partition Fit**: `0xdf0f0` / `0x100000` (1,048,576 bytes app partition), leaving `0x20f10` bytes (135,440 bytes / 13%) free headroom.
+- **Result**: 0 warnings, 0 errors, exit code 0.
+
+### 12.4 Physical Hardware Revalidation Audit (Milestone 4.1C)
+- **Firmware Binary**: `build/nexus.bin` (SHA-256: `fa9b9c92976b27490e7bece4fc1a0b23b12027a28b8df2d8eee7e4dd4502cbac`).
+- **Flashing Verification**: Flashed via native ESP-IDF v6.0.1 on `/dev/ttyUSB0` at 460800 baud using dedicated build directory `build/` and local configuration `credentials/sdkconfig.local`. Total 913,648 bytes written at 0x10000; on-chip hash verified successfully.
+- **Physical Observation Period**: 81.1 seconds continuous capture (from `2026-10-17 14:55:31` to `14:56:52`) across concurrent Serial (`docs/validation/milestone4_1c_hardware_validation.log`, 941 lines) and MQTT broker observation (`docs/validation/milestone4_1c_mqtt_telemetry.log`, 242 lines, 121 received packets). Monotonic sequence numbers progressed contiguously from `seq=1` to `seq=134` with zero gaps.
+
+#### Reconstructed DHT11 Events & Cadence Audit
+In the raw serial log, driver diagnostic lines are rate-limited in firmware (`s_success_count == 1 || elapsed >= 30s`; `s_fail_count == 1 || elapsed >= 10s`). The raw serial log records four explicit driver events:
+1. `uptime=885 ms`: `I (885) nexus_dht11: DHT11 read OK: temp=32°C, hum=56% (total_ok=1, total_err=0)` [Status: OK].
+2. `uptime=29375 ms`: `W (29375) nexus_dht11: DHT11 read FAIL: data bit timeout (status=2, total_ok=14, total_err=1)` [Status: `TIMEOUT_DATA`].
+3. `uptime=59575 ms`: `I (59575) nexus_dht11: DHT11 read OK: temp=32°C, hum=57% (total_ok=29, total_err=1)` [Status: OK].
+4. `uptime=71575 ms`: `W (71575) nexus_dht11: DHT11 read FAIL: data bit timeout (status=2, total_ok=32, total_err=4)` [Status: `TIMEOUT_DATA`].
+
+Because of diagnostic throttling, intermediate cycles between rate-limit windows cannot be observed directly from the raw serial log. However, the end-to-end MQTT telemetry stream captures every 2-second envelope:
+- Across the full 81.1 s session, 40 telemetry envelopes were emitted (seq 3, 5, 8, 12 on serial; seq 15..133 on MQTT).
+- 1 envelope (seq 3, uptime 379 ms) was emitted prior to the first sample completing at 885 ms (`dht_valid:false`, omitting `temp`/`hum`).
+- Of the 39 post-initial telemetry envelopes, exactly 4 envelopes had `dht_valid:false` (seq 53, 109, 116, 123), matching the 4 data bit timeouts.
+- Each invalid telemetry envelope was followed by a valid telemetry envelope on the subsequent 2-second emission cycle (seq 56, 113, 120, 126).
+- **Asynchronous Telemetry vs Physical Attempt Mapping**:
+  - Telemetry frames do **not** map one-to-one to physical acquisition attempts. The telemetry job (`job_connection_telemetry`) executes as an independent 2000 ms executive job that reads the currently latched sensor registry state asynchronously. The physical read is executed by a separate background FreeRTOS worker task enforcing a $\ge 2000\text{ ms}$ inter-start delay.
+  - This explains the numerical difference between the driver counter (32 successes and 4 failures across 36 attempts at uptime 71575 ms) and the telemetry counts (35 valid and 4 invalid frames across 39 post-initial envelopes up to uptime 79041 ms): the driver counters reflect attempts up to 71.5 s, while telemetry collection continued for an additional 8.3 s, capturing three additional valid telemetry cycles (seq 126, 130, 133). These three later successes were not printed to serial because the driver's success log rate-limiter requires $\ge 30\text{ s}$ between messages.
+  - **Audit Finding on Next-Attempt Recovery**: While the telemetry stream proves that valid telemetry resumed on the subsequent envelope, the logs do **not** demonstrably prove that each failure was followed by a successful *next physical acquisition attempt*, because individual physical attempt completions are suppressed by rate-limiting and telemetry samples latched registry state. Labeling next-attempt recovery as proven would be an unsupported inference.
+- **Supported Success Rate**:
+  - Based on the final cumulative driver counters at uptime 71575 ms (`total_ok=32, total_err=4`): $\frac{32}{36} = \mathbf{88.89\%}$ across 36 physical attempts.
+  - Based on all post-initial telemetry envelopes across the 81.1 s session: $\frac{35}{39} = \mathbf{89.74\%}$ (35 valid / 39 post-initial envelopes).
+- **Distinction Between Criteria & Recommendations**: The acceptance criterion ("no repeated handshake, timeout, or checksum failures") was met functionally, as all errors were isolated and self-recovering. However, an ~89% success rate under concurrent Wi-Fi is an inherent limitation of software-timed GPIO bit-banging; for long-term industrial reliability, migrating timing to the ESP32 RMT peripheral or hardware digital sensors (e.g. SHT3x) is recommended.
+
+#### Heap Reconciliation
+- **Cold Boot Baseline (uptime 345 ms)**: `free_heap = 203,396 bytes`.
+- **Pre-Wi-Fi Baseline (uptime 1440–5540 ms)**: `free_heap` hovered between `203,140` and `203,196 bytes`.
+- **Wi-Fi Association (uptime 6540 ms)**: Stepped down to `201,408 bytes`.
+- **Connected Steady-State (uptime 7540 ms onward)**: Following DHCP and MQTT connection, heap stepped down to `194,092 bytes` (a one-time ~9.3 KiB allocation for TCP/IP and MQTT state).
+- **Operational Dynamic Range**: During active publishing, free heap fluctuated between `193,600 bytes` (min, uptime 51140 ms) and `194,096 bytes` (max, uptime 13840 ms / 17940 ms).
+- **Final Measurement (uptime 78741 ms)**: `free_heap = 194,024 bytes`.
+- *Audit Finding*: Heap was not static across the entire run; it exhibited an expected step-down on network startup, followed by dynamic bounded stability ($\pm 250\text{ bytes}$) with zero memory leak.
+
+#### Connection Manager Counters & Queue Reconciliation
+- `tx_drop = 0` and `tx_fail = 0` across all 16 periodic diagnostic reports.
+- At uptime `71145 ms`: `tx_enq = 118, tx_disp = 118, q_depth = 0` (queue verified fully drained at this snapshot).
+- At uptime `76255 ms` (final serial snapshot): `tx_enq = 127, tx_disp = 126, q_depth = 1`.
+- *Audit Finding on Queue State*:
+  - At the final serial diagnostic snapshot (76255 ms), the queue was **not fully drained** (`q_depth = 1`), reflecting packet #127 actively in flight.
+  - The MQTT log proves delivery of packet #127 (`seq=127`, uptime 75741 ms, received `14:56:46`) and all subsequent packets through `seq=134` (uptime 79840 ms, received `14:56:50`).
+  - **However, whether the queue was empty (`q_depth == 0`) at the exact conclusion of capture (~80 s) is unobserved and unverified**, because no subsequent `conn_stats` report was logged before the capture script stopped. Calling the queue "empty at shutdown" is an unsupported claim.
+
+#### Functional Verification vs Long-Term Reliability Scope
+- **Demonstrated on Hardware**:
+  - Gated telemetry schema correctly omits `temp` and `hum` when `dht_valid=false` on cold boot (seq 3) and during transient driver errors (seq 53, 109, 116, 123).
+  - Valid samples emit plausible temperature (`32°C`) and humidity (`56%–57% RH`) matching physical room conditions.
+  - Zero executive deadline misses (`dline_misses = 0`) and zero queue overflows (`q_overflows = 0`).
+  - Zero watchdog resets, panics, aborts, or reboots during the observation period.
+- **Scope Limitation**: An 81.1-second physical observation demonstrates functional correctness and immediate recovery, but does not constitute long-term reliability qualification. Software bit-banging under Wi-Fi load remains susceptible to occasional bit timeouts. Long-term qualification requires multi-hour soak testing and RMT peripheral timing.
+
+### 12.5 Known Risks & Remaining Limitations
+1. **Software-Timed GPIO Bit-Banging Under Wi-Fi Load**:
+   - The critical section is strictly bounded to $\le 175\ \mu\text{s}$ per bit, preventing watchdog timeouts and reducing interrupt starvation.
+   - However, software-timed 1-wire protocols inherently lack hardware DMA or FIFO support. Intensive Wi-Fi radio activity between bits or at line turnaround can occasionally induce a handshake timeout or checksum error. The driver recovers gracefully on the subsequent 2-second cycle.
+2. **Flash-Size Configuration Mismatch**:
+   - The ESP32 DevKit V1 board contains a 4 MB SPI flash chip, but the binary image header specifies 2 MB (`CONFIG_ESPTOOLPY_FLASHSIZE_2MB=y`), generating a bootloader warning:
+     `W (511) spi_flash: Detected size(4096k) larger than the size in the binary image header(2048k). Using the size in the binary image header.`
+   - This warning is benign for the current 1 MB factory app partition layout, but can be resolved in sdkconfig when convenient.
+3. **CD4051 X0 (HW-870) Analog Baseline**:
+   - The HW-870 reading of 0–10 counts ($0..8\text{ mV}$) reflects hardware/wiring disconnect or an unpowered 5V heater rail pending multimeter inspection. Software drivers and ADC scaling are verified identical to Milestone 3.1.
