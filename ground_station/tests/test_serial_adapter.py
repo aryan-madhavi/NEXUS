@@ -333,6 +333,25 @@ class TestSerialTransportAdapter(unittest.TestCase):
         self.assertEqual(stats.frames_dropped_oversized, 1)
         self.assertEqual(stats.frames_forwarded, 1)
 
+    def test_open_serial_with_real_pty(self):
+        """Verify _open_serial against a real POSIX pseudo-terminal with DTR/RTS protection."""
+        import os
+        import pty
+
+        master, slave = pty.openpty()
+        slave_name = os.ttyname(slave)
+        try:
+            config = SerialConfig(port=slave_name, serial_factory=None)
+            adapter = SerialTransportAdapter(config=config)
+            ser = adapter._open_serial()
+            self.assertTrue(ser.is_open)
+            self.assertFalse(ser.dtr)
+            self.assertFalse(ser.rts)
+            ser.close()
+        finally:
+            os.close(master)
+            os.close(slave)
+
 
 if __name__ == "__main__":
     unittest.main()

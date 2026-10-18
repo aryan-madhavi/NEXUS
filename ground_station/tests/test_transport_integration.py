@@ -18,6 +18,7 @@ from ground_station.connection_manager.serial_adapter import (
 )
 from ground_station.tests.test_mqtt_adapter import MockMqttClient, MockMqttMessage
 from ground_station.tests.test_serial_adapter import MockSerialPort
+from ground_station.persistence.point_mapper import PointMapper
 
 
 class TestTransportIntegration(unittest.TestCase):
@@ -246,6 +247,135 @@ class TestTransportIntegration(unittest.TestCase):
         mqtt_client.on_message(mqtt_client, None, msg)
         self.assertEqual(mqtt_adapter.get_stats().messages_received, 0)
         self.assertEqual(manager.get_stats().messages_received, 0)
+
+    def test_serial_firmware_compatibility_and_persistence_mapping(self):
+        """Simulate realistic physical firmware UART stream through serial adapter, host manager, and point mapper.
+
+        Validates:
+        - ESP-IDF bootloader and system log lines are safely rejected as malformed JSON without disrupting stream.
+        - Multiple frames in a single chunk with CRLF and LF delimiters.
+        - Fragmented envelope arrival across chunk boundaries.
+        - Oversized frame (>= 256 bytes) dropped by serial adapter.
+        - Corrupted JSON frame parsed and rejected as parse error.
+        - Firmware envelopes (hb, status, telem without DHT, telem with DHT) cleanly parsed.
+        - PointMapper strictly suppresses temp and hum when dht_valid is False and includes them when True.
+        - InfluxDB tags dev='nexus_esp32' and transport='serial' are accurately populated.
+        """
+        manager = NexusHostManager(queue_capacity=50)
+        serial_port = MockSerialPort(port="/dev/test_serial")
+        serial_adapter = SerialTransportAdapter(
+            config=SerialConfig(
+                port="/dev/test_serial",
+                max_frame_bytes=256,
+                serial_factory=lambda *a, **kw: serial_port,
+            ),
+            name="serial",
+        )
+        manager.register_transport(serial_adapter)
+        manager.start()
+
+        # 1. ESP-IDF boot banner (non-JSON log lines)
+        boot_log1 = b"I (13) boot: ESP-IDF v6.0.1 2nd stage bootloader\n"
+        boot_log2 = b"I (260) nexus_main: reset_reason=1\n"
+        serial_port.feed_bytes(boot_log1 + boot_log2)
+
+        # 2. Heartbeat frame (complete with LF)
+        hb_frame = b'{"ver":1,"dev":"nexus_esp32","seq":1,"type":"hb","uptime":327,"heap":198872,"ticks":1}\n'
+        serial_port.feed_bytes(hb_frame)
+
+        # 3. Status frame with CRLF
+        status_frame = b'{"ver":1,"dev":"nexus_esp32","seq":2,"type":"status","uptime":366,"disp":5,"comp":4,"fail":0,"lat_us":0,"dur_us":8945}\r\n'
+        serial_port.feed_bytes(status_frame)
+
+        # 4. Oversized frame (> 256 bytes)
+        oversized = b'{"ver":1,"dev":"nexus_esp32","seq":99,"type":"cmd","payload":"' + (b"X" * 260) + b'"}\n'
+        serial_port.feed_bytes(oversized)
+
+        # 5. Malformed JSON frame
+        malformed = b'{"ver":1,"dev":"nexus_esp32","seq":99,"type":BROKEN_SYNTAX\n'
+        serial_port.feed_bytes(malformed)
+
+        # 6. Fragmented Degraded Telemetry (dht_valid=false, temp/hum omitted) across 2 chunks
+        degraded_telem = b'{"ver":1,"dev":"nexus_esp32","seq":3,"type":"telem","uptime":366,"ldr":0,"x0":3146,"dht_valid":false}\n'
+        serial_port.feed_bytes(degraded_telem[:30])
+        serial_port.feed_bytes(degraded_telem[30:])
+
+        # 7. Valid Telemetry (dht_valid=true, temp=31, hum=74)
+        valid_telem = b'{"ver":1,"dev":"nexus_esp32","seq":4,"type":"telem","uptime":2421,"ldr":0,"x0":3146,"temp":31,"hum":74,"dht_valid":true}\n'
+        serial_port.feed_bytes(valid_telem)
+
+        # Wait for all chunks to be processed
+        start = time.monotonic()
+        while time.monotonic() - start < 1.0:
+            if manager.get_stats().enqueued_count >= 4:
+                break
+            time.sleep(0.01)
+
+        manager.stop()
+
+        # Check serial adapter metrics
+        adapter_stats = serial_adapter.get_stats()
+        self.assertEqual(adapter_stats.frames_dropped_oversized, 1)
+
+        # Check host manager metrics:
+        # Received: 2 boot lines + 1 hb + 1 status + 1 malformed + 1 degraded telem + 1 valid telem = 7 lines passed to manager
+        # (oversized was dropped at the serial adapter layer)
+        # Parsed: hb (1), status (2), degraded telem (3), valid telem (4) = 4
+        # Parse errors: boot_log1, boot_log2, malformed = 3
+        mgr_stats = manager.get_stats()
+        self.assertEqual(mgr_stats.messages_parsed, 4)
+        self.assertEqual(mgr_stats.parse_errors, 3)
+        self.assertEqual(mgr_stats.enqueued_count, 4)
+        self.assertEqual(mgr_stats.queue_size, 4)
+
+        # Dequeue and map all 4 valid envelopes
+        e_hb = manager.get_envelope_nowait()
+        e_status = manager.get_envelope_nowait()
+        e_telem_degraded = manager.get_envelope_nowait()
+        e_telem_valid = manager.get_envelope_nowait()
+
+        self.assertIsNotNone(e_hb)
+        self.assertIsNotNone(e_status)
+        self.assertIsNotNone(e_telem_degraded)
+        self.assertIsNotNone(e_telem_valid)
+
+        # Validate Heartbeat mapping
+        d_hb = PointMapper.to_dict(e_hb)
+        self.assertEqual(d_hb["measurement"], "nexus_hb")
+        self.assertEqual(d_hb["tags"]["dev"], "nexus_esp32")
+        self.assertEqual(d_hb["tags"]["transport"], "serial")
+        self.assertEqual(d_hb["fields"]["free_heap"], 198872)
+        self.assertEqual(d_hb["fields"]["exec_ticks"], 1)
+
+        # Validate Status mapping
+        d_status = PointMapper.to_dict(e_status)
+        self.assertEqual(d_status["measurement"], "nexus_status")
+        self.assertEqual(d_status["fields"]["dispatched"], 5)
+        self.assertEqual(d_status["fields"]["completed"], 4)
+        self.assertEqual(d_status["fields"]["failed"], 0)
+
+        # Validate Degraded Telemetry mapping (Missing-Data Semantics)
+        d_degraded = PointMapper.to_dict(e_telem_degraded)
+        self.assertEqual(d_degraded["measurement"], "nexus_telem")
+        self.assertEqual(d_degraded["tags"]["dev"], "nexus_esp32")
+        self.assertEqual(d_degraded["tags"]["transport"], "serial")
+        self.assertEqual(d_degraded["fields"]["dht_valid"], False)
+        self.assertEqual(d_degraded["fields"]["ldr_raw"], 0)
+        self.assertEqual(d_degraded["fields"]["x0_raw"], 3146)
+        # temp and hum MUST NOT be present in fields
+        self.assertNotIn("temp", d_degraded["fields"])
+        self.assertNotIn("hum", d_degraded["fields"])
+
+        # Validate Valid Telemetry mapping
+        d_valid = PointMapper.to_dict(e_telem_valid)
+        self.assertEqual(d_valid["measurement"], "nexus_telem")
+        self.assertEqual(d_valid["tags"]["dev"], "nexus_esp32")
+        self.assertEqual(d_valid["tags"]["transport"], "serial")
+        self.assertEqual(d_valid["fields"]["dht_valid"], True)
+        self.assertEqual(d_valid["fields"]["ldr_raw"], 0)
+        self.assertEqual(d_valid["fields"]["x0_raw"], 3146)
+        self.assertEqual(d_valid["fields"]["temp"], 31.0)
+        self.assertEqual(d_valid["fields"]["hum"], 74.0)
 
 
 if __name__ == "__main__":

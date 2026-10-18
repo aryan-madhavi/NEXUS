@@ -160,37 +160,92 @@ class SerialTransportAdapter(TransportAdapter):
             thread.join(timeout=2.0)
 
     def _open_serial(self) -> Any:
-        """Open serial port with explicit DTR/RTS reset prevention."""
+        """Open serial port with explicit DTR/RTS reset prevention.
+
+        Note: On classic ESP32 boards with CP2102/CH340 USB bridges, the kernel driver
+        open() syscall may assert control lines transiently in hardware before userspace
+        can apply ioctl/termios settings; userspace pre-configuration minimizes but
+        cannot eliminate hardware/driver-level resets on port open.
+        """
         if not self._config.port:
             raise ValueError("Serial port is not configured; cannot open connection")
 
         factory = self._config.serial_factory
-        if factory is None:
-            if serial is None:
-                raise ImportError("pyserial is required for SerialTransportAdapter; install via ground_station/requirements.txt")
-            factory = serial.Serial
-        # Explicit hardware safety: rtscts=False, dsrdtr=False, no initial RTS/DTR toggle
-        ser = factory(
-            port=self._config.port,
-            baudrate=self._config.baud_rate,
-            timeout=self._config.read_timeout_sec,
-            rtscts=False,
-            dsrdtr=False,
-        )
+        if factory is not None:
+            # Explicit hardware safety for caller-provided factory / mock
+            ser = factory(
+                port=self._config.port,
+                baudrate=self._config.baud_rate,
+                timeout=self._config.read_timeout_sec,
+                rtscts=False,
+                dsrdtr=False,
+            )
+            if hasattr(ser, "dtr"):
+                try:
+                    ser.dtr = False
+                except Exception:
+                    pass
+            if hasattr(ser, "rts"):
+                try:
+                    ser.rts = False
+                except Exception:
+                    pass
+            return ser
 
-        # Ensure DTR and RTS are not asserted if the serial object supports them
-        if hasattr(ser, "dtr"):
+        if serial is None:
+            raise ImportError("pyserial is required for SerialTransportAdapter; install via ground_station/requirements.txt")
+
+        # Explicit hardware safety: rtscts=False, dsrdtr=False, do_not_open=True to configure DTR/RTS before open
+        try:
+            ser = serial.serial_for_url(
+                self._config.port,
+                baudrate=self._config.baud_rate,
+                timeout=self._config.read_timeout_sec,
+                rtscts=False,
+                dsrdtr=False,
+                do_not_open=True,
+            )
+            if hasattr(ser, "dtr"):
+                try:
+                    ser.dtr = False
+                except Exception:
+                    pass
+            if hasattr(ser, "rts"):
+                try:
+                    ser.rts = False
+                except Exception:
+                    pass
+            ser.open()
+            # Clear HUPCL if termios is available to prevent hangup pulse on close
             try:
-                ser.dtr = False
+                import termios
+                if hasattr(ser, "fd") and ser.fd:
+                    attrs = termios.tcgetattr(ser.fd)
+                    attrs[2] &= ~termios.HUPCL
+                    termios.tcsetattr(ser.fd, termios.TCSANOW, attrs)
             except Exception:
                 pass
-        if hasattr(ser, "rts"):
-            try:
-                ser.rts = False
-            except Exception:
-                pass
-
-        return ser
+            return ser
+        except Exception as err:
+            logger.debug("serial_for_url failed (%s), falling back to serial.Serial: %s", self._config.port, err)
+            ser = serial.Serial(
+                port=self._config.port,
+                baudrate=self._config.baud_rate,
+                timeout=self._config.read_timeout_sec,
+                rtscts=False,
+                dsrdtr=False,
+            )
+            if hasattr(ser, "dtr"):
+                try:
+                    ser.dtr = False
+                except Exception:
+                    pass
+            if hasattr(ser, "rts"):
+                try:
+                    ser.rts = False
+                except Exception:
+                    pass
+            return ser
 
     def _reader_loop(self) -> None:
         """Worker thread loop handling bounded buffered serial reading and reconnects."""
