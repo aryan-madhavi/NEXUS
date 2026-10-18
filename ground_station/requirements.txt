@@ -1,0 +1,8 @@
+# NEXUS Host Ground Station dependencies
+# Core connection manager and envelope parser use only standard library.
+# The following dependencies are required for adapter work (Milestone 5) and testing.
+
+pyserial>=3.5
+paho-mqtt>=2.0.0
+influxdb-client>=1.40.0
+pytest>=8.0.0

@@ -1,0 +1,127 @@
+# NEXUS Ground Station — Service Provisioning
+# Phase 5.3B.1: InfluxDB 2.x Time-Series Persistence Engine
+# Phase 5.3B.2: Eclipse Mosquitto MQTT Broker Integration
+#
+# Production Usage:
+#   1. Copy .env.example to .env:
+#        cp .env.example .env
+#   2. Edit .env to set strong passwords, tokens, and listener interfaces.
+#   3. Validate configuration without starting containers:
+#        podman-compose config  (or docker compose config)
+#   4. Start all services:
+#        podman-compose up -d   (or docker compose up -d)
+#   5. Check service health:
+#        podman-compose ps      (or docker compose ps)
+#   6. Stop services (preserving all persistent data volumes):
+#        podman-compose down    (or docker compose down)
+#
+# CRITICAL SAFETY NOTICE:
+#   NEVER run 'docker compose down -v' or 'podman-compose down -v' for routine shutdown.
+#   The '-v' flag deletes all named persistent data volumes (telemetry database & broker store).
+#
+# Security Notice:
+#   Both InfluxDB (8086) and MQTT (1883) are bound to 127.0.0.1 (loopback interface only) by default.
+#   Never bind to 0.0.0.0 without dedicated reverse proxy, TLS termination, and authentication.
+#   If NEXUS ESP32 firmware connects via Wi-Fi from the LAN, see the network section in
+#   ground_station/README.md for secure LAN exposure options.
+
+services:
+  influxdb:
+    image: influxdb:${INFLUXDB_VERSION:-2.7.11}
+    container_name: nexus_influxdb
+    restart: unless-stopped
+    ports:
+      # Local loopback binding only; never expose to 0.0.0.0 without TLS
+      - "127.0.0.1:${INFLUXDB_PORT:-8086}:8086"
+    environment:
+      # Automatic initial setup mode for InfluxDB 2.x
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME:-nexus_admin}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD:-nexus_admin_password_change_me}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG:-nexus}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET:-nexus_telemetry}
+      - DOCKER_INFLUXDB_INIT_RETENTION=${INFLUXDB_INIT_RETENTION:-0}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_INIT_ADMIN_TOKEN:-nexus_secret_admin_token_change_me}
+    volumes:
+      # Persistent named volumes for engine data and configuration
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    healthcheck:
+      test: ["CMD-SHELL", "influx ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - nexus_net
+
+  mqtt:
+    image: eclipse-mosquitto:${MOSQUITTO_VERSION:-2.1.2}
+    container_name: nexus_broker
+    restart: unless-stopped
+    ports:
+      # Local loopback binding only; never expose to 0.0.0.0 without authentication & TLS
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+    volumes:
+      # Broker configuration file (mounted read-only with SELinux shared label for rootless podman)
+      - ./credentials/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro,z
+      # Persistent named volumes for message persistence and logs
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -p 1883 -t '$$SYS/broker/uptime' -C 1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - nexus_net
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-11.5.0}
+    container_name: nexus_grafana
+    restart: unless-stopped
+    ports:
+      # Local loopback binding only; never expose to 0.0.0.0 without reverse proxy & TLS
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-nexus_grafana_password_change_me}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_ANONYMOUS_ENABLED:-false}
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=${GRAFANA_ANONYMOUS_ORG_ROLE:-Viewer}
+      # InfluxDB token passed to Grafana for datasource provisioning interpolation
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN:-${INFLUXDB_INIT_ADMIN_TOKEN:-nexus_secret_admin_token_change_me}}
+    volumes:
+      # Persistent named volume for Grafana state
+      - grafana_data:/var/lib/grafana
+      # Read-only provisioning and dashboard mounts (with :ro,z for SELinux rootless Podman)
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro,z
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    networks:
+      - nexus_net
+
+volumes:
+  influxdb_data:
+    name: nexus_influxdb_data
+  influxdb_config:
+    name: nexus_influxdb_config
+  mosquitto_data:
+    name: nexus_mosquitto_data
+  mosquitto_log:
+    name: nexus_mosquitto_log
+  grafana_data:
+    name: nexus_grafana_data
+
+networks:
+  nexus_net:
+    name: nexus_network
