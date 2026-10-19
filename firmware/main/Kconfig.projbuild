@@ -26,6 +26,20 @@ menu "NEXUS Connection Configuration"
         help
             MQTT client identifier string.
 
+    config NEXUS_MQTT_USERNAME
+        string "MQTT Username"
+        default ""
+        help
+            Username for MQTT broker authentication.
+            Leave empty ("") to disable MQTT authentication.
+
+    config NEXUS_MQTT_PASSWORD
+        string "MQTT Password"
+        default ""
+        help
+            Password for MQTT broker authentication.
+            Leave empty if unauthenticated.
+
     config NEXUS_MQTT_TOPIC_PREFIX
         string "MQTT Topic Prefix"
         default "nexus/nexus_esp32"

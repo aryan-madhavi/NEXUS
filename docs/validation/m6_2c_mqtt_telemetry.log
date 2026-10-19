@@ -1,0 +1,44 @@
+MQTT Telemetry Packets Received:21
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":14,"type":"hb","uptime":7520,"heap":193844,"ticks":73}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":15,"type":"hb","uptime":8520,"heap":192100,"ticks":83}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":16,"type":"telem","uptime":8522,"ldr":0,"x0":1455,"temp":31,"hum":63,"dht_valid":true}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":17,"type":"hb","uptime":9620,"heap":193844,"ticks":94}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":18,"type":"status","uptime":10434,"disp":52,"comp":51,"fail":0,"lat_us":100008,"dur_us":29930}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":19,"type":"hb","uptime":10620,"heap":193628,"ticks":104}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":20,"type":"telem","uptime":10622,"ldr":0,"x0":1409,"temp":31,"hum":63,"dht_valid":true}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":21,"type":"hb","uptime":11620,"heap":191892,"ticks":114}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":22,"type":"hb","uptime":12720,"heap":193856,"ticks":125}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":23,"type":"telem","uptime":12722,"ldr":0,"x0":1408,"temp":31,"hum":63,"dht_valid":true}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":24,"type":"hb","uptime":13720,"heap":193856,"ticks":135}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":25,"type":"hb","uptime":14720,"heap":193856,"ticks":145}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":26,"type":"telem","uptime":14722,"ldr":0,"x0":1351,"temp":31,"hum":63,"dht_valid":true}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":27,"type":"status","uptime":15534,"disp":78,"comp":77,"fail":0,"lat_us":100008,"dur_us":29930}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":28,"type":"hb","uptime":15721,"heap":193392,"ticks":155}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":29,"type":"hb","uptime":16820,"heap":193856,"ticks":166}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":30,"type":"telem","uptime":16822,"ldr":0,"x0":1367,"temp":31,"hum":63,"dht_valid":true}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":31,"type":"hb","uptime":17920,"heap":191904,"ticks":177}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":32,"type":"telem","uptime":18820,"ldr":0,"x0":1296,"temp":31,"hum":63,"dht_valid":true}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":33,"type":"hb","uptime":18920,"heap":193576,"ticks":187}
+
+[MQTT RX] topic=nexus/nexus_esp32/telemetry payload={"ver":1,"dev":"nexus_esp32","seq":34,"type":"hb","uptime":19920,"heap":192040,"ticks":197}
+
+======================================================================

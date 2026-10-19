@@ -1,0 +1,21 @@
+# NEXUS Phase 6.1 Serial Ingestion Capture
+# Started: 2026-10-19 05:40:21.308Z
+# Port: /dev/ttyUSB0, Baud: 115200
+
+[2026-10-19 05:40:21.976Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":1,"type":"hb","uptime":114,"heap":249900,"ticks":1}
+[2026-10-19 05:40:22.009Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":2,"type":"status","uptime":150,"disp":5,"comp":4,"fail":0,"lat_us":0,"dur_us":5433}
+[2026-10-19 05:40:22.210Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":3,"type":"telem","uptime":150,"ldr":0,"x0":1328,"dht_valid":false}
+[2026-10-19 05:40:23.242Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":4,"type":"hb","uptime":1210,"heap":254004,"ticks":12}
+[2026-10-19 05:40:24.053Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":5,"type":"hb","uptime":2210,"heap":254004,"ticks":22}
+[2026-10-19 05:40:24.254Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":6,"type":"telem","uptime":2211,"ldr":0,"x0":1477,"temp":31,"hum":63,"dht_valid":true}
+[2026-10-19 05:40:25.242Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":7,"type":"hb","uptime":3210,"heap":254004,"ticks":32}
+[2026-10-19 05:40:26.053Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":8,"type":"hb","uptime":4210,"heap":254004,"ticks":42}
+[2026-10-19 05:40:26.254Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":9,"type":"telem","uptime":4211,"ldr":0,"x0":1459,"temp":31,"hum":62,"dht_valid":true}
+[2026-10-19 05:40:27.064Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":10,"type":"hb","uptime":5210,"heap":254004,"ticks":52}
+[2026-10-19 05:40:27.275Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":11,"type":"status","uptime":5237,"disp":31,"comp":30,"fail":0,"lat_us":96493,"dur_us":30395}
+[2026-10-19 05:40:28.053Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":12,"type":"hb","uptime":6210,"heap":254004,"ticks":62}
+[2026-10-19 05:40:28.254Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":13,"type":"telem","uptime":6211,"ldr":0,"x0":1422,"temp":31,"hum":63,"dht_valid":true}
+[2026-10-19 05:40:29.242Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":14,"type":"hb","uptime":7210,"heap":254004,"ticks":72}
+[2026-10-19 05:40:30.053Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":15,"type":"hb","uptime":8210,"heap":254004,"ticks":82}
+[2026-10-19 05:40:30.254Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":16,"type":"telem","uptime":8211,"ldr":0,"x0":1453,"temp":31,"hum":63,"dht_valid":true}
+[2026-10-19 05:40:31.242Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":17,"type":"hb","uptime":9210,"heap":254004,"ticks":92}

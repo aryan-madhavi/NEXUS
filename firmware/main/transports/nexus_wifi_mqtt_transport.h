@@ -11,6 +11,8 @@ extern "C" {
 #define NEXUS_WIFI_PASS_MAX_LEN       65U
 #define NEXUS_MQTT_URI_MAX_LEN        128U
 #define NEXUS_MQTT_CLIENT_ID_MAX_LEN  33U
+#define NEXUS_MQTT_USERNAME_MAX_LEN   33U
+#define NEXUS_MQTT_PASSWORD_MAX_LEN   65U
 #define NEXUS_MQTT_TOPIC_MAX_LEN      64U
 
 typedef struct {
@@ -18,6 +20,8 @@ typedef struct {
     char password[NEXUS_WIFI_PASS_MAX_LEN];
     char broker_uri[NEXUS_MQTT_URI_MAX_LEN];
     char client_id[NEXUS_MQTT_CLIENT_ID_MAX_LEN];
+    char username[NEXUS_MQTT_USERNAME_MAX_LEN];
+    char mqtt_password[NEXUS_MQTT_PASSWORD_MAX_LEN];
     char topic_prefix[NEXUS_MQTT_TOPIC_MAX_LEN];
     uint32_t reconnect_base_ms;
     uint32_t reconnect_max_ms;

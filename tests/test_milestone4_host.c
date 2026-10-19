@@ -489,6 +489,8 @@ static void test_f05_f06_unconfigured_defaults_and_lifecycle(void)
             .broker_uri = "mqtt://localhost:1883",
             .client_id = "nexus_esp32",
             .topic_prefix = "nexus/nexus_esp32",
+            .username = "",
+            .mqtt_password = "",
             .reconnect_base_ms = 1000,
             .reconnect_max_ms = 60000
         }
@@ -577,6 +579,86 @@ static void test_f05_f06_unconfigured_defaults_and_lifecycle(void)
     assert(!nexus_conn_mgr_is_running(&mgr));
 
     printf("  [PASS] F-05 & F-06: Unconfigured defaults, safe stop lifecycle, self-stop rejection, and rollback\n");
+}
+
+static void test_mqtt_auth_configuration_and_rejection_of_missing_credentials(void)
+{
+    printf("  [TEST] MQTT authentication configuration and explicit rejection of missing credentials...\n");
+
+    nexus_transport_t transport;
+
+    /* Case 1: SSID configured, but empty username and empty password -> MUST FAIL and reject anonymous fallback */
+    nexus_wifi_mqtt_config_t cfg_missing_all = {
+        .ssid = "TestWiFi",
+        .password = "wifipass",
+        .broker_uri = "mqtt://127.0.0.1:1883",
+        .client_id = "nexus_esp32",
+        .topic_prefix = "nexus/nexus_esp32",
+        .username = "",
+        .mqtt_password = "",
+        .reconnect_base_ms = 1000,
+        .reconnect_max_ms = 60000
+    };
+    bool init_ok = nexus_wifi_mqtt_transport_init(&transport, &cfg_missing_all);
+    assert(!init_ok);
+    assert(transport.state == NEXUS_CONN_STATE_FAILED);
+
+    /* Connection manager init must also reject invalid/anonymous Wi-Fi configuration */
+    nexus_conn_mgr_t mgr;
+    nexus_conn_mgr_config_t conn_cfg_missing = {
+        .default_route = NEXUS_ROUTE_AUTO,
+        .serial_cfg = { .baud_rate = 115200, .uart_port = 0 },
+        .wifi_mqtt_cfg = cfg_missing_all
+    };
+    assert(!nexus_conn_mgr_init(&mgr, &conn_cfg_missing));
+
+    /* Case 2: SSID configured, valid username, but empty password -> MUST FAIL */
+    nexus_wifi_mqtt_config_t cfg_missing_pass = cfg_missing_all;
+    strncpy(cfg_missing_pass.username, "nexus_device", sizeof(cfg_missing_pass.username) - 1);
+    cfg_missing_pass.mqtt_password[0] = '\0';
+    init_ok = nexus_wifi_mqtt_transport_init(&transport, &cfg_missing_pass);
+    assert(!init_ok);
+    assert(transport.state == NEXUS_CONN_STATE_FAILED);
+
+    /* Case 3: SSID configured, empty username, non-empty password -> MUST FAIL */
+    nexus_wifi_mqtt_config_t cfg_missing_user = cfg_missing_all;
+    cfg_missing_user.username[0] = '\0';
+    strncpy(cfg_missing_user.mqtt_password, "some_pass", sizeof(cfg_missing_user.mqtt_password) - 1);
+    init_ok = nexus_wifi_mqtt_transport_init(&transport, &cfg_missing_user);
+    assert(!init_ok);
+    assert(transport.state == NEXUS_CONN_STATE_FAILED);
+
+    /* Case 4: SSID configured with valid username and password -> MUST SUCCEED in DISCONNECTED state */
+    nexus_wifi_mqtt_config_t cfg_valid = cfg_missing_all;
+    strncpy(cfg_valid.username, "nexus_device", sizeof(cfg_valid.username) - 1);
+    strncpy(cfg_valid.mqtt_password, "test_pass_123", sizeof(cfg_valid.mqtt_password) - 1);
+    init_ok = nexus_wifi_mqtt_transport_init(&transport, &cfg_valid);
+    assert(init_ok);
+    assert(transport.state == NEXUS_CONN_STATE_DISCONNECTED);
+
+    /* Case 5: SSID empty (unconfigured) -> MUST SUCCEED and remain idle in DISCONNECTED state */
+    nexus_wifi_mqtt_config_t cfg_unconfigured = cfg_missing_all;
+    cfg_unconfigured.ssid[0] = '\0';
+    init_ok = nexus_wifi_mqtt_transport_init(&transport, &cfg_unconfigured);
+    assert(init_ok);
+    assert(transport.state == NEXUS_CONN_STATE_DISCONNECTED);
+
+    /* Verify conn_mgr works in unconfigured Wi-Fi mode while preserving Serial */
+    nexus_conn_mgr_config_t conn_cfg_unconfigured = {
+        .default_route = NEXUS_ROUTE_AUTO,
+        .serial_cfg = { .baud_rate = 115200, .uart_port = 0 },
+        .wifi_mqtt_cfg = cfg_unconfigured
+    };
+    assert(nexus_conn_mgr_init(&mgr, &conn_cfg_unconfigured));
+    assert(nexus_conn_mgr_get_transport_state(&mgr, NEXUS_TRANSPORT_TYPE_SERIAL) == NEXUS_CONN_STATE_DISCONNECTED);
+    assert(nexus_conn_mgr_get_transport_state(&mgr, NEXUS_TRANSPORT_TYPE_MQTT) == NEXUS_CONN_STATE_DISCONNECTED);
+    assert(nexus_conn_mgr_start(&mgr));
+    assert(nexus_conn_mgr_get_transport_state(&mgr, NEXUS_TRANSPORT_TYPE_SERIAL) == NEXUS_CONN_STATE_CONNECTED);
+    assert(nexus_conn_mgr_get_state(&mgr) == NEXUS_CONN_STATE_CONNECTED);
+    assert(nexus_conn_mgr_stop(&mgr));
+    assert(nexus_conn_mgr_get_state(&mgr) == NEXUS_CONN_STATE_DISCONNECTED);
+
+    printf("  [PASS] MQTT authentication configuration and explicit rejection of missing credentials\n");
 }
 
 static void test_start_rejected_when_worker_terminating(void)
@@ -1238,6 +1320,7 @@ int main(void)
     test_f02_composite_deduplication_and_isolation();
     test_f04_reconnect_backoff_calculation();
     test_f05_f06_unconfigured_defaults_and_lifecycle();
+    test_mqtt_auth_configuration_and_rejection_of_missing_credentials();
     test_start_rejected_when_worker_terminating();
     test_executive_timing_isolation();
     test_executive_and_sensors_integration();

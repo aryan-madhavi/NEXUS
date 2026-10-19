@@ -283,6 +283,8 @@ void app_main(void)
             .broker_uri = CONFIG_NEXUS_MQTT_BROKER_URI,
             .client_id = CONFIG_NEXUS_MQTT_CLIENT_ID,
             .topic_prefix = CONFIG_NEXUS_MQTT_TOPIC_PREFIX,
+            .username = CONFIG_NEXUS_MQTT_USERNAME,
+            .mqtt_password = CONFIG_NEXUS_MQTT_PASSWORD,
             .reconnect_base_ms = CONFIG_NEXUS_RECONNECT_BASE_MS,
             .reconnect_max_ms = CONFIG_NEXUS_RECONNECT_MAX_MS
         }

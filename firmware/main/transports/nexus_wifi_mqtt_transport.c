@@ -369,6 +369,13 @@ static bool wifi_mqtt_init(nexus_transport_t *t)
         return true;
     }
 
+    /* Refuse anonymous MQTT connection if credentials are not configured */
+    if (s_esp_ctx.config.username[0] == '\0' || s_esp_ctx.config.mqtt_password[0] == '\0') {
+        ESP_LOGE(TAG, "MQTT credentials missing; refusing anonymous connection");
+        t->state = NEXUS_CONN_STATE_FAILED;
+        return false;
+    }
+
     /* Initialize NVS, Netif, Event loop */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -396,6 +403,8 @@ static bool wifi_mqtt_init(nexus_transport_t *t)
                                   s_esp_ctx.config.broker_uri : "mqtt://localhost:1883";
     mqtt_cfg.credentials.client_id = (s_esp_ctx.config.client_id[0] != '\0') ?
                                      s_esp_ctx.config.client_id : "nexus_esp32";
+    mqtt_cfg.credentials.username = s_esp_ctx.config.username;
+    mqtt_cfg.credentials.authentication.password = s_esp_ctx.config.mqtt_password;
 
     s_esp_ctx.mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
     if (s_esp_ctx.mqtt_client) {
@@ -409,6 +418,12 @@ static bool wifi_mqtt_init(nexus_transport_t *t)
     };
     esp_timer_create(&timer_args, &s_esp_ctx.reconnect_timer);
 #else
+    if (s_mock_wifi_mqtt.config.ssid[0] != '\0') {
+        if (s_mock_wifi_mqtt.config.username[0] == '\0' || s_mock_wifi_mqtt.config.mqtt_password[0] == '\0') {
+            t->state = NEXUS_CONN_STATE_FAILED;
+            return false;
+        }
+    }
     s_mock_wifi_mqtt.length = 0;
     s_mock_wifi_mqtt.force_failure = false;
     s_mock_wifi_mqtt.connected = false;
@@ -645,6 +660,15 @@ bool nexus_wifi_mqtt_transport_init(nexus_transport_t *transport, const nexus_wi
     memset(&s_mock_wifi_mqtt, 0, sizeof(s_mock_wifi_mqtt));
     if (config) {
         memcpy(&s_mock_wifi_mqtt.config, config, sizeof(nexus_wifi_mqtt_config_t));
+    }
+    if (s_mock_wifi_mqtt.config.reconnect_base_ms == 0) {
+        s_mock_wifi_mqtt.config.reconnect_base_ms = 1000U;
+    }
+    if (s_mock_wifi_mqtt.config.reconnect_max_ms == 0) {
+        s_mock_wifi_mqtt.config.reconnect_max_ms = 60000U;
+    }
+    if (s_mock_wifi_mqtt.config.topic_prefix[0] == '\0') {
+        strncpy(s_mock_wifi_mqtt.config.topic_prefix, "nexus/nexus_esp32", sizeof(s_mock_wifi_mqtt.config.topic_prefix) - 1);
     }
 #endif
 

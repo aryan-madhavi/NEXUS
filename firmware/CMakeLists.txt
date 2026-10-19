@@ -1,3 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
+if(NOT DEFINED SDKCONFIG AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/../credentials/sdkconfig.local")
+    set(SDKCONFIG "${CMAKE_CURRENT_LIST_DIR}/../credentials/sdkconfig.local")
+endif()
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(nexus)
