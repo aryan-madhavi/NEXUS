@@ -36,6 +36,9 @@ timeline
     2026-10-17 - 18 : Milestone 4 Qualification : 30-minute Continuous Hardware Soak (12/12 Criteria PASS)
                     : Concurrency spinlock fix eliminates drops (tx_drop=0, tx_fail=0)
                     : 30/30 Host Tests (14/14 M4, 11/11 M3, 5/5 M2; ASan/UBSan clean) : Final Sign-Off
+    2026-10-18 : Milestone 5 : Python Ground Station Daemon & Containerized Observability Stack
+               : InfluxDB v2, Mosquitto, Grafana 11.5 dashboard
+               : Writer lifecycle remediation, 99 host tests, and physical serial validation
 ```
 
 ---
@@ -106,9 +109,23 @@ timeline
 
 ---
 
+### Phase 6: Host Ground Station, InfluxDB Persistence & Observability (Milestone 5)
+- **Problem**: Raw newline-delimited JSON envelopes streamed across USB Serial and MQTT require resilient ingestion, schema validation, persistent time-series storage, and live visual monitoring without losing data or exhausting host resources.
+- **Architectural Shift**:
+  - Implemented a modular, multi-transport Python Ground Station daemon in `ground_station/`:
+    - `EnvelopeParser`: Enforces 256-byte maximum line length, validates JSON schema, verifies type discrimination, and rejects non-finite float values (`NaN`, `Inf`).
+    - `DeviceTracker`: Tracks per-device sequence numbers, reboot occurrences, and telemetry heartbeats. Quarantines unrecognized device IDs to prevent database pollution.
+    - `SerialTransportAdapter`: Interacts with physical UART using non-blocking I/O (0.2s timeout), a bounded 4096-byte line assembly buffer, and explicit DTR/RTS deassertion (`ser.dtr = False`, `ser.rts = False`, `rtscts=False`) to prevent resetting classic ESP32 boards on port open.
+    - `MqttTransportAdapter`: Subscribes to broker topics using Paho MQTT v2 with strict topic regex validation (`^nexus/([^/]+)/telemetry$`).
+    - `PointMapper` & `InfluxDBWriter`: Maps Protocol v1 payloads into InfluxDB v2 point schemas. Enforces strict tag cardinality (`dev`, `type`, `transport` only; readings, sequence, and uptime stored strictly as unindexed fields). Missing DHT11 readings are completely omitted when `dht_valid=false` rather than recording misleading zero values. Host receive wall-clock timestamping (`received_at`) guarantees accurate temporal alignment.
+  - **Docker Observability Stack**: Containerized InfluxDB 2.7.11, Eclipse Mosquitto 2.1.2, and Grafana 11.5.0 using Docker Compose. Enforces 100% loopback port isolation (`127.0.0.1:8086`, `127.0.0.1:1883`, `127.0.0.1:3000`), secure credential templating via `.env.example`, and pre-provisioned datasource and 8-panel dashboard (`nexus_telemetry.json`).
+  - **Remediation & Validation**: Fixed an `InfluxDBWriter` lifecycle race on timed-out worker joins via `is_shutdown_timed_out` tracking. Comprehensive test suite of 99 automated unit tests passed (100%). Physical validation achieved via `ground_station/run_serial_ingestion.py` streaming live frames over `/dev/ttyUSB0` at 115200 baud (`docs/validation/phase6_1_serial_ingestion.log`).
+
+---
+
 ## 3. Cross-Cutting Design Principles
 
-The technical consistency of the NEXUS codebase is governed by five core architectural principles:
+The technical consistency of the NEXUS codebase is governed by six core architectural principles:
 
 ### 1. Zero Runtime Dynamic Allocation
 All queues, descriptors, sample buffers, envelopes, and state contexts are allocated as static globals or pre-sized arrays at startup. Once `app_main` initializes, zero calls to `malloc`, `calloc`, or `pvPortMalloc` occur in the steady-state runtime loop, eliminating heap fragmentation and out-of-memory crashes.
@@ -130,20 +147,23 @@ $$\text{dispatched} = \text{completed} + \text{failed} + \text{in\_flight}$$
 $$\text{heap\_free}(t) \to \text{constant}$$
 $$\text{deadline\_misses} \equiv 0 \quad (\forall \tau_{\text{callback}} \le \text{budget})$$
 
+### 6. Time-Series Cardinality Control & Host Data Provenance
+Host-side telemetry storage must protect time-series indexing performance. High-entropy values (readings, uptime, monotonic sequence counters) are stored strictly as unindexed fields, restricting indexed tags strictly to low-cardinality metadata (`dev`, `type`, `transport`). Timestamps reflect host receive wall-clock time while preserving firmware monotonic uptime as an integer field for reboot identification.
+
 ---
 
 ## 4. Architectural Summary Across Milestones
 
-| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 |
-|---|---|---|---|---|---|---|
-| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated |
-| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
-| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots |
-| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots |
-| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) |
-| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) |
-| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) |
-| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) |
-| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` |
-| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (14/14 M4, 11/11 M3, 5/5 M2; ASan/UBSan clean) |
-| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS, 0 drops, 0 resets, 1,798.9 s uptime) |
+| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 | Milestone 5 |
+|---|---|---|---|---|---|---|---|
+| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated | Preserved & isolated |
+| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
+| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots |
+| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots |
+| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) | 8 sensors (Integrated) |
+| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) | Python dual adapter (Serial + MQTT) |
+| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) | Protocol v1 JSON (Host parsed, float-checked) |
+| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) | 16 slots (MCU) + 1000 items (Host manager) |
+| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` | Host `DeviceTracker` sliding sequence window |
+| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (ASan/UBSan clean) | 99/99 passed (100% across 10 modules) |
+| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS) | Live serial ingestion over `/dev/ttyUSB0` |

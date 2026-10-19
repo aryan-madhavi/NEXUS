@@ -15,6 +15,7 @@ This directory contains the sequential, fully documented technical records of ev
 | **M3** | [**MILESTONE_3.md**](MILESTONE_3.md) | Sensor Subsystem, Sensor Registry & Initial Active Drivers | **ACCEPTED** (with timing audit) | Host Unit Tests + 65s Physical Telemetry | `0bd6fb2` |
 | **M3.1** | [**MILESTONE_3_1.md**](MILESTONE_3_1.md) | Executive Timing-Contract Correction & Hardware Baseline | **ACCEPTED** | Host Regression Tests + 70s Physical Telemetry | `9738535`, `17cea82`, [`milestone3_1_validation_report.md`](../validation/milestone3_1_validation_report.md) |
 | **M4** | [**MILESTONE_4.md**](MILESTONE_4.md) | Unified Connection Manager, Protocol v1 Envelopes & Audit | **ACCEPTED & SIGNED OFF** | Physical 30-min Hardware Soak (12/12 Criteria PASS) | `build/nexus.bin` (`4f9850bc...`), [`soak_qualification_run2_report.md`](../validation/soak_qualification_run2_report.md), [`milestone4_validation_report.md`](../validation/milestone4_validation_report.md) |
+| **M5** | [**MILESTONE_5.md**](MILESTONE_5.md) | Python Ground Station, InfluxDB Persistence & Grafana Observability | **ACCEPTED & COMMITTED** | 99 Unit Tests (100% pass) + Physical Serial Log | `59b2864`, `7243003`, [`run_serial_ingestion.py`](../../ground_station/run_serial_ingestion.py), [`phase6_1_serial_ingestion.log`](../validation/phase6_1_serial_ingestion.log) |
 | **Hist** | [**PROJECT_HISTORY.md**](PROJECT_HISTORY.md) | Chronological Project History & Architectural Evolution | **CURRENT** | Synthesis of all repository milestones | [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) |
 
 ---
@@ -63,6 +64,20 @@ This directory contains the sequential, fully documented technical records of ev
   - Physical 30-minute continuous hardware soak qualification (**12/12 criteria PASS**, 100%): `tx_drop=0`, `tx_fail=0`, `dline_misses=0`, `q_overflows=0`, 0 resets, monotonic uptime 1,798.9 s, heap leak-free (+199.4 B/hr, $R^2=0.00$), 89.09% valid telemetry, 89.17% physical driver success.
   - **Milestone 4 is FULLY ACCEPTED AND SIGNED OFF (PASS)**. Cleared to proceed to Milestone 5.
 
+### [Milestone 5 — Host Ground Station, InfluxDB & Grafana Observability](MILESTONE_5.md)
+- **Objective**: Implement a modular, asynchronous Python host ground station daemon and containerized observability stack for real-time ingestion, time-series storage, and visual monitoring of Protocol v1 telemetry.
+- **Key Deliverables**:
+  - Python ground station package in `ground_station/`: `EnvelopeParser`, `DeviceTracker`, `NexusHostManager`, `SerialTransportAdapter`, `MqttTransportAdapter`, `PersistenceWriter`, `PointMapper`, and `InfluxDBWriter`.
+  - Strict Protocol v1 validation: 256-byte framing ceiling, rejection of non-finite float values (`NaN`, `Inf`), payload schema verification, and device identity quarantine.
+  - Transport resilience: Hardware-safe serial adapter with DTR/RTS explicitly deasserted (`ser.dtr = False`, `ser.rts = False`, `rtscts=False`) to prevent ESP32 bootloader reset loops; Paho MQTT v2 adapter with strict topic regex validation.
+  - InfluxDB v2 schema design: Tag cardinality bounded to `dev`, `type`, and `transport`. Numeric telemetry, sequence numbers, and monotonic uptime stored strictly as unindexed fields. Missing DHT11 data omitted (`temp`/`hum` omitted when `dht_valid=false`) rather than stored as false zero readings. Host wall-clock receive timestamping (`received_at`).
+  - Containerized infrastructure (`docker-compose.yml`): InfluxDB 2.7.11, Eclipse Mosquitto 2.1.2, and Grafana 11.5.0 with strict loopback bindings (`127.0.0.1`), healthchecks, persistent volumes, and `.env.example`.
+  - Grafana dashboard (`grafana/dashboards/nexus_telemetry.json`): 8-panel production dashboard featuring live environmental telemetry, executive health, and transport diagnostics.
+  - Remediation & Lifecycle: Fixed InfluxDB writer shutdown race on timed-out worker joins via `is_shutdown_timed_out` tracking and restart prevention.
+  - Host test suite: 99 automated unit tests across 10 test modules (100% pass rate).
+  - Physical hardware serial validation: `ground_station/run_serial_ingestion.py` streamed and validated live frames over `/dev/ttyUSB0` at 115200 baud (`docs/validation/phase6_1_serial_ingestion.log`).
+- **Outcome**: Ground station daemon and observability stack fully accepted and committed (`59b2864`, `7243003`).
+
 ---
 
 ## 3. Subsystem Dependency & Progression Graph
@@ -75,9 +90,9 @@ flowchart TD
     M3_1[Milestone 3.1: Executive Timing-Contract Correction]
     M4[Milestone 4: Unified Connection Manager & Transports]
     M4_Gate{30-Min Soak Qualification: 12/12 PASS}
+    M5[Milestone 5: Ground Station & InfluxDB / Grafana]
     
     subgraph Active & Future Roadmap
-        M5[Milestone 5: Ground Station & InfluxDB / Grafana]
         M6[Milestone 6: Bidirectional Command Protocol & Registry]
         M7[Milestone 7: AI / LLM Tool Service Integration]
     end
@@ -88,16 +103,16 @@ flowchart TD
     M3_1 -->|Guaranteed Timing Isolation Baseline| M4
     M4 -->|Spinlock Fix & Hardware EN Pulse| M4_Gate
     M4_Gate -->|Validated Dual-Link Telemetry| M5
-    M5 --> M6
+    M5 -->|Live Telemetry Ingestion Pipeline| M6
     M6 --> M7
 
     classDef done fill:#2e7d32,stroke:#1b5e20,color:#ffffff;
     classDef pending fill:#f57f17,stroke:#bc5100,color:#ffffff;
     classDef future fill:#37474f,stroke:#263238,color:#ffffff;
     
-    class M1,M2,M3,M3_1,M4,M4_Gate done;
-    class M5 pending;
-    class M6,M7 future;
+    class M1,M2,M3,M3_1,M4,M4_Gate,M5 done;
+    class M6 pending;
+    class M7 future;
 ```
 
 ---
@@ -107,7 +122,7 @@ flowchart TD
 To prevent ambiguity regarding what has been physically demonstrated versus simulated or compiled, NEXUS documentation enforces five strict evidence classifications:
 
 1. **Host Unit Tests (`HOST_TEST`)**:
-   Code is compiled on Fedora Linux with `gcc` and executed locally against mocked hardware or loopback interfaces. Demonstrates algorithmic correctness, memory bounds, and queue mechanics. Does NOT prove ESP32 silicon execution.
+   Code is compiled on Fedora Linux with `gcc` (firmware) or executed via `pytest` (ground station) locally against mocked hardware or loopback interfaces. Demonstrates algorithmic correctness, memory bounds, and queue mechanics. Does NOT prove ESP32 silicon execution.
 2. **Firmware Compilation (`BUILD_PASS`)**:
    Cross-compilation for Xtensa LX6 using ESP-IDF `idf.py build` succeeds with zero errors and zero warnings. Proves binary linkability, memory partition fitting, and header compatibility.
 3. **Physical Serial Log (`HW_SERIAL_LOG`)**:
@@ -121,15 +136,12 @@ To prevent ambiguity regarding what has been physically demonstrated versus simu
 
 ## 5. Future Development Roadmap
 
-Following the completion and physical validation of Milestone 4:
-- **Milestone 5 — Host Ground Station, InfluxDB & Grafana**:
-  - Python-based host serial/MQTT ingestion daemon in `ground_station/`.
-  - InfluxDB time-series storage schema for environmental telemetry.
-  - Production Grafana dashboard displaying live temperature, humidity, gas concentration, light intensity, and executive health metrics.
-- **Milestone 6 — Bidirectional Command Protocol & Command Registry**:
+Following the completion and validation of Milestone 5:
+- **Milestone 6 — Bidirectional Command Protocol & Command Registry (IN PROGRESS)**:
   - Formal command dispatch table on ESP32 (`nexus_command_registry`).
   - Secure inbound command parsing (`LED`, `BUZ`, `RATE`, `RESET`, `CALIB`).
   - Host-to-device command acknowledgments with explicit error codes.
+  - Bidirectional command transport over USB Serial and MQTT.
 - **Milestone 7 — AI / LLM Telemetry Service**:
   - Python tool service bridging local telemetry to Open WebUI.
   - Evaluation of local SLM inference (Cactus-Compute / Needle) on compatible models.
