@@ -39,6 +39,10 @@ timeline
     2026-10-18 : Milestone 5 : Python Ground Station Daemon & Containerized Observability Stack
                : InfluxDB v2, Mosquitto, Grafana 11.5 dashboard
                : Writer lifecycle remediation, 99 host tests, and physical serial validation
+    2026-10-18 - 19 : Milestone 6 : Secure Wi-Fi/MQTT Transport, Broker Authentication & Hardware Validation
+                    : Host loopback broker isolation & least-privilege topic ACLs (RC 135)
+                    : ESP32 credential integration, missing-credential guard, local secret isolation
+                    : 15/15 host tests, physical flash, and live dual-transport telemetry
 ```
 
 ---
@@ -123,9 +127,20 @@ timeline
 
 ---
 
+### Phase 7: Authenticated Wi-Fi/MQTT Transport, Broker Security & Dual-Link Hardware Validation (Milestone 6)
+- **Problem**: Opening the MQTT broker to external physical hardware on the local Wi-Fi LAN without authentication risks unauthorized access, topic spoofing, and container exposure. Furthermore, firmware missing credentials could silently fall back to anonymous connections, and secrets risked leakage into source control.
+- **Architectural Shift**:
+  - **Controlled Network Topology & Port Isolation**: Maintained strict loopback binding (`127.0.0.1:1883`) for the containerized broker in `docker-compose.yml`. A controlled host forwarder bridges traffic from the host external Wi-Fi IP (`10.12.252.18:1883`) to loopback, avoiding unconstrained `0.0.0.0` container exposure.
+  - **Role-Based Broker Hardening**: Disabled anonymous access (`allow_anonymous false`) in Mosquitto 2.1.2. Implemented least-privilege topic Access Control Lists (`credentials/mosquitto.acl`) granting the edge device (`nexus_device`) write-only access to `nexus/nexus_esp32/telemetry`, the Ground Station (`nexus_ground_station`) read-only access to `nexus/+/telemetry`, and denying all unauthorized actions (verified via MQTT v5 Reason Code 135).
+  - **Fail-Closed Firmware Authentication**: Configured `esp_mqtt_client_config_t` credentials (`username`, `password`, `client_id`) in `nexus_wifi_mqtt_transport.c` utilizing native ESP-IDF v6.0.1 APIs. Enforced a missing-credential guard that immediately transitions the transport to `NEXUS_CONN_STATE_FAILED` if Wi-Fi is enabled without valid MQTT credentials, completely eliminating silent anonymous fallback.
+  - **Git Secret Isolation**: Established an automated build override in `firmware/CMakeLists.txt` that pulls configuration from git-ignored `credentials/sdkconfig.local` (mode `0600`), ensuring that tracked Kconfig files and Git commit logs remain 100% free of plaintext credentials.
+  - **Hardware Validation**: Flashed `build/nexus.bin` to physical `ESP32-D0WD-V3` silicon. Verified cold boot, Wi-Fi association (AP `Aryan`), DHCP lease (`10.12.252.214`), authenticated MQTT session, 21 live packets ingested by Ground Station on `nexus/+/telemetry` without dropped frames, and concurrent serial ingestion (17 InfluxDB points).
+
+---
+
 ## 3. Cross-Cutting Design Principles
 
-The technical consistency of the NEXUS codebase is governed by six core architectural principles:
+The technical consistency of the NEXUS codebase is governed by seven core architectural principles:
 
 ### 1. Zero Runtime Dynamic Allocation
 All queues, descriptors, sample buffers, envelopes, and state contexts are allocated as static globals or pre-sized arrays at startup. Once `app_main` initializes, zero calls to `malloc`, `calloc`, or `pvPortMalloc` occur in the steady-state runtime loop, eliminating heap fragmentation and out-of-memory crashes.
@@ -150,20 +165,24 @@ $$\text{deadline\_misses} \equiv 0 \quad (\forall \tau_{\text{callback}} \le \te
 ### 6. Time-Series Cardinality Control & Host Data Provenance
 Host-side telemetry storage must protect time-series indexing performance. High-entropy values (readings, uptime, monotonic sequence counters) are stored strictly as unindexed fields, restricting indexed tags strictly to low-cardinality metadata (`dev`, `type`, `transport`). Timestamps reflect host receive wall-clock time while preserving firmware monotonic uptime as an integer field for reboot identification.
 
+### 7. Least-Privilege Network & Credential Boundaries
+Services published by the container stack remain bound strictly to loopback (`127.0.0.1`), requiring explicit, controlled host-level bridges for physical LAN device ingress. Topic-level ACLs enforce strict privilege boundaries (edge devices cannot subscribe to other nodes' telemetry or broadcast arbitrary messages). If authentication credentials are absent, network transports fail closed (`NEXUS_CONN_STATE_FAILED`) rather than falling back to unauthenticated operation, and secrets are segregated into local, git-ignored configuration overlays.
+
 ---
 
 ## 4. Architectural Summary Across Milestones
 
-| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 | Milestone 5 |
-|---|---|---|---|---|---|---|---|
-| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated | Preserved & isolated |
-| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
-| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots |
-| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots |
-| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) | 8 sensors (Integrated) |
-| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) | Python dual adapter (Serial + MQTT) |
-| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) | Protocol v1 JSON (Host parsed, float-checked) |
-| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) | 16 slots (MCU) + 1000 items (Host manager) |
-| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` | Host `DeviceTracker` sliding sequence window |
-| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (ASan/UBSan clean) | 99/99 passed (100% across 10 modules) |
-| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS) | Live serial ingestion over `/dev/ttyUSB0` |
+| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 | Milestone 5 | Milestone 6 |
+|---|---|---|---|---|---|---|---|---|
+| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated |
+| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
+| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots |
+| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots |
+| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) | 8 sensors (Integrated) | 8 sensors (Integrated) |
+| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) | Python dual adapter (Serial + MQTT) | Dual-link: Serial + Authenticated Wi-Fi/MQTT |
+| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) | Protocol v1 JSON (Host parsed, float-checked) | Protocol v1 JSON (Host parsed & validated) |
+| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) |
+| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` | Host `DeviceTracker` sliding sequence window | 32-entry composite + Host `DeviceTracker` |
+| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (ASan/UBSan clean) | 99/99 passed (100% across 10 modules) | 15/15 C tests (ASan/UBSan) + 99 Python + 19 soak + 9 ACL |
+| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS) | Live serial ingestion over `/dev/ttyUSB0` | Cold boot, Wi-Fi DHCP, Auth MQTT (21 pkts), Live Serial |
+

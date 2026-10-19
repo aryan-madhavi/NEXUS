@@ -16,6 +16,7 @@ This directory contains the sequential, fully documented technical records of ev
 | **M3.1** | [**MILESTONE_3_1.md**](MILESTONE_3_1.md) | Executive Timing-Contract Correction & Hardware Baseline | **ACCEPTED** | Host Regression Tests + 70s Physical Telemetry | `9738535`, `17cea82`, [`milestone3_1_validation_report.md`](../validation/milestone3_1_validation_report.md) |
 | **M4** | [**MILESTONE_4.md**](MILESTONE_4.md) | Unified Connection Manager, Protocol v1 Envelopes & Audit | **ACCEPTED & SIGNED OFF** | Physical 30-min Hardware Soak (12/12 Criteria PASS) | `build/nexus.bin` (`4f9850bc...`), [`soak_qualification_run2_report.md`](../validation/soak_qualification_run2_report.md), [`milestone4_validation_report.md`](../validation/milestone4_validation_report.md) |
 | **M5** | [**MILESTONE_5.md**](MILESTONE_5.md) | Python Ground Station, InfluxDB Persistence & Grafana Observability | **ACCEPTED & COMMITTED** | 99 Unit Tests (100% pass) + Physical Serial Log | `59b2864`, `7243003`, [`run_serial_ingestion.py`](../../ground_station/run_serial_ingestion.py), [`phase6_1_serial_ingestion.log`](../validation/phase6_1_serial_ingestion.log) |
+| **M6** | [**MILESTONE_6.md**](MILESTONE_6.md) | Secure Wi-Fi/MQTT Transport, Broker Authentication & Hardware Validation | **ACCEPTED & COMMITTED** | Host Unit Tests (15/15) + Cold Boot & Live Dual-Link Hardware Telemetry | `8f53877`, `ee20f8d`, `7243003`, [`milestone6_2c_validation_report.md`](../validation/milestone6_2c_validation_report.md), [`m6_2c_mqtt_telemetry.log`](../validation/m6_2c_mqtt_telemetry.log) |
 | **Hist** | [**PROJECT_HISTORY.md**](PROJECT_HISTORY.md) | Chronological Project History & Architectural Evolution | **CURRENT** | Synthesis of all repository milestones | [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) |
 
 ---
@@ -78,6 +79,17 @@ This directory contains the sequential, fully documented technical records of ev
   - Physical hardware serial validation: `ground_station/run_serial_ingestion.py` streamed and validated live frames over `/dev/ttyUSB0` at 115200 baud (`docs/validation/phase6_1_serial_ingestion.log`).
 - **Outcome**: Ground station daemon and observability stack fully accepted and committed (`59b2864`, `7243003`).
 
+### [Milestone 6 — Secure Wi-Fi/MQTT Transport, Broker Authentication & Hardware Validation](MILESTONE_6.md)
+- **Objective**: Establish a hardened, authenticated Wi-Fi/MQTT telemetry pipeline connecting physical ESP32 hardware to the containerized broker and Ground Station while preserving loopback network isolation and USB serial operation.
+- **Key Deliverables**:
+  - **Phase 6.1**: Physical USB serial ingestion validated via [`ground_station/run_serial_ingestion.py`](../../ground_station/run_serial_ingestion.py) over `/dev/ttyUSB0` (61 frames, 0 drops, live InfluxDB storage).
+  - **Phase 6.2A**: Designed network architecture with container loopback binding (`127.0.0.1:1883`) and controlled host forwarder (`10.12.252.18:1883`), role-based identities, and least-privilege topic hierarchy (`nexus/<dev>/telemetry`, `nexus/<dev>/cmd`).
+  - **Phase 6.2B**: Hardened Eclipse Mosquitto 2.1.2 broker in [`docker-compose.yml`](../../docker-compose.yml) with `allow_anonymous false`, hashed password file (`mosquitto.passwd`), and topic ACLs (`mosquitto.acl`) mounted read-only (`:ro,z`).
+  - **Phase 6.2B.1**: Security enforcement verified with 9-test host suite (anonymous connection rejected, bad password rejected, unauthorized publish rejected with MQTT v5 Reason Code 135, loopback binding verified).
+  - **Phase 6.2C**: Firmware MQTT authentication wired via native ESP-IDF v6.0.1 `esp_mqtt_client_config_t` APIs; missing-credential guard implemented (`NEXUS_CONN_STATE_FAILED`); local secret isolation established via git-ignored [`credentials/sdkconfig.local`](../../credentials/sdkconfig.local) and CMake fallback; 15/15 host C unit tests passed (ASan/UBSan clean).
+  - **Hardware Validation**: Flashed `build/nexus.bin` (913,856 bytes, SHA-256 `8fad0f8e...`) to `ESP32-D0WD-V3` on `/dev/ttyUSB0`; verified cold boot, Wi-Fi association (AP `Aryan`), DHCP lease (`10.12.252.214`), authenticated MQTT connection, 21 live telemetry packets ingested by Ground Station, and concurrent serial ingestion (17 InfluxDB points).
+- **Outcome**: Dual-transport communication and security hardening fully accepted and committed (`8f53877`, `ee20f8d`, `7243003`).
+
 ---
 
 ## 3. Subsystem Dependency & Progression Graph
@@ -91,9 +103,10 @@ flowchart TD
     M4[Milestone 4: Unified Connection Manager & Transports]
     M4_Gate{30-Min Soak Qualification: 12/12 PASS}
     M5[Milestone 5: Ground Station & InfluxDB / Grafana]
+    M6[Milestone 6: Authenticated Dual-Transport Hardware Validation]
     
     subgraph Active & Future Roadmap
-        M6[Milestone 6: Bidirectional Command Protocol & Registry]
+        M6_3[Milestone 6.3: Bidirectional Command Protocol & Registry]
         M7[Milestone 7: AI / LLM Tool Service Integration]
     end
 
@@ -104,14 +117,15 @@ flowchart TD
     M4 -->|Spinlock Fix & Hardware EN Pulse| M4_Gate
     M4_Gate -->|Validated Dual-Link Telemetry| M5
     M5 -->|Live Telemetry Ingestion Pipeline| M6
-    M6 --> M7
+    M6 -->|Authenticated Transport Backbone| M6_3
+    M6_3 --> M7
 
     classDef done fill:#2e7d32,stroke:#1b5e20,color:#ffffff;
     classDef pending fill:#f57f17,stroke:#bc5100,color:#ffffff;
     classDef future fill:#37474f,stroke:#263238,color:#ffffff;
     
-    class M1,M2,M3,M3_1,M4,M4_Gate,M5 done;
-    class M6 pending;
+    class M1,M2,M3,M3_1,M4,M4_Gate,M5,M6 done;
+    class M6_3 pending;
     class M7 future;
 ```
 
@@ -136,12 +150,13 @@ To prevent ambiguity regarding what has been physically demonstrated versus simu
 
 ## 5. Future Development Roadmap
 
-Following the completion and validation of Milestone 5:
-- **Milestone 6 — Bidirectional Command Protocol & Command Registry (IN PROGRESS)**:
+Following the completion and validation of Milestone 6:
+- **Milestone 6.3 — Bidirectional Command Protocol & Command Registry (NEXT)**:
   - Formal command dispatch table on ESP32 (`nexus_command_registry`).
-  - Secure inbound command parsing (`LED`, `BUZ`, `RATE`, `RESET`, `CALIB`).
-  - Host-to-device command acknowledgments with explicit error codes.
-  - Bidirectional command transport over USB Serial and MQTT.
+  - Inbound command reception on `nexus/<device_id>/cmd` via `nexus_wifi_mqtt_rx_handler_t`.
+  - Secure command parsing and execution inside the cyclic executive (`LED`, `BUZ`, `RATE`, `RESET`, `CALIB`).
+  - Host-to-device command acknowledgments and execution responses (`resp` envelopes).
 - **Milestone 7 — AI / LLM Telemetry Service**:
-  - Python tool service bridging local telemetry to Open WebUI.
+  - Python tool service bridging local InfluxDB telemetry to Open WebUI.
+  - Secure AI queries isolated from device actuation topics via broker ACLs.
   - Evaluation of local SLM inference (Cactus-Compute / Needle) on compatible models.
