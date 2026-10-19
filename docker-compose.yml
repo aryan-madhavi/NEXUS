@@ -60,8 +60,9 @@ services:
     container_name: nexus_broker
     restart: unless-stopped
     ports:
-      # Local loopback binding only; never expose to 0.0.0.0 without authentication & TLS
+      # Local loopback binding and deliberate host LAN interface binding for physical ESP32 access (authenticated & ACL-enforced)
       - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+      - "${MQTT_BIND_IP:-10.12.252.18}:${MQTT_PORT:-1883}:1883"
     volumes:
       # Broker configuration and authentication files (mounted read-only with SELinux shared label for rootless podman)
       - ./credentials/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro,z

@@ -328,25 +328,34 @@ flowchart TD
   - Phase 6.2B: Mosquitto broker hardened with hashed authentication, topic ACLs, and TCP healthcheck ([`commit 8f53877`](file:///home/aryan/Projects/SPIT/NEXUS)).
   - Phase 6.2B.1: Broker ACL enforcement verified with 9/9 passing tests; loopback isolation confirmed.
   - Phase 6.2C: Firmware MQTT credential wiring, missing-credential guard, local CMake override, 15/15 host tests, physical flash, and live dual-transport validation ([`commit ee20f8d`](file:///home/aryan/Projects/SPIT/NEXUS)).
-  - Milestone 6 is **100% COMPLETE, VERIFIED & COMMITTED**.
+  - Phase 6.3: Permanent broker LAN exposure, dedicated MQTT ingestion runner ([`run_mqtt_ingestion.py`](file:///home/aryan/Projects/SPIT/NEXUS/ground_station/run_mqtt_ingestion.py)), simultaneous dual-stream runner ([`run_dual_transport_ingestion.py`](file:///home/aryan/Projects/SPIT/NEXUS/ground_station/run_dual_transport_ingestion.py)), InfluxDB direct storage verification, Grafana query verification, and broker fault-tolerance / reconnection testing.
+  - Milestone 6 is **COMPLETE — PHYSICALLY VERIFIED**.
 
 ---
 
-## 11. Lessons and Connections to Later Milestones
+## 11. Phase 6.3: Physical Acceptance & End-to-End Validation
 
-Milestone 6 successfully realized the **dual-transport communication backbone** envisioned in Milestone 4. The ESP32 is now proven capable of acquiring analog and digital environmental sensor data, scheduling real-time cyclic tasks, and concurrently transmitting framed JSON telemetry over both local USB serial and authenticated wireless Wi-Fi/MQTT.
+In Phase 6.3, the entire end-to-end data pipeline was verified against physical ESP32 silicon:
+1. **Persistent Broker Reachability**: `docker-compose.yml` updated to bind port 1883 to `127.0.0.1:1883` and `10.12.252.18:1883`, eliminating the need for temporary `socat` forwarders while preserving loopback isolation.
+2. **Ground Station MQTT Runner**: Created [`ground_station/run_mqtt_ingestion.py`](file:///home/aryan/Projects/SPIT/NEXUS/ground_station/run_mqtt_ingestion.py) piping live validated envelopes through `NexusHostManager` into `InfluxDBWriter`.
+3. **Physical Storage Verification**: Over 445 field records with `transport=mqtt` confirmed in bucket `nexus_telemetry`. Missing DHT samples strictly omitted `temp` and `hum` fields rather than writing `0.0`.
+4. **Grafana Verification**: Direct API queries to datasource `nexus_influxdb_flux` returned schema `['Time', 'temp']` with live physical data.
+5. **Simultaneous Dual-Transport**: Validated concurrent ingestion of serial and MQTT with 0 queue drops, 0 executive stalls, and complete sequence progression.
+6. **Broker Disconnect & Recovery**: Tested 12-second broker outage. Serial telemetry streamed uninterrupted (20 envelopes), and MQTT reconnected autonomously within 3.6 seconds of broker restart.
 
-With transport security and end-to-end ingestion fully operational, the system is primed for **Milestone 6.3: Bidirectional Command Protocol & On-Device Execution**:
-- Ground Station transmitting structured commands (`LED`, `BUZ`, `RATE`, `RESET`, `CALIB`) to `nexus/<dev>/cmd`.
-- ESP32 subscription and packet parsing via `nexus_wifi_mqtt_rx_handler_t`.
-- Safe command execution inside the cooperative cyclic executive using `nexus_command_registry`.
-- Transmitting command acknowledgments and execution responses (`resp` envelopes) back to the Ground Station.
+See the comprehensive validation report in [`docs/validation/milestone6_3_validation_report.md`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/milestone6_3_validation_report.md).
+
+---
+
+## 12. Lessons and Connections to Later Milestones
+
+Milestone 6 successfully realized the **dual-transport communication backbone** envisioned in Milestone 4. The ESP32 is now proven capable of acquiring analog and digital environmental sensor data, scheduling real-time cyclic tasks, and concurrently transmitting framed JSON telemetry over both local USB serial and authenticated wireless Wi-Fi/MQTT directly into InfluxDB and Grafana.
 
 Furthermore, these security guarantees ensure that when **Milestone 7 (AI / Open WebUI Tool Service)** is integrated, AI agents can query live telemetry from InfluxDB while being barred by broker ACLs from issuing unauthorized device commands.
 
 ---
 
-## 12. Source References and Evidence
+## 13. Source References and Evidence
 
 - **Primary Git Commits**:
   - `72430035c2bdd28cd3418e1368b5fc1d9917ee18` (*feat(nexus): validate physical USB serial ingestion*)
@@ -366,8 +375,11 @@ Furthermore, these security guarantees ensure that when **Milestone 7 (AI / Open
 - **Host Testing & Validation Files**:
   - [`tests/test_milestone4_host.c`](file:///home/aryan/Projects/SPIT/NEXUS/tests/test_milestone4_host.c) (15/15 test groups passing, ASan/UBSan clean)
   - [`ground_station/run_serial_ingestion.py`](file:///home/aryan/Projects/SPIT/NEXUS/ground_station/run_serial_ingestion.py)
-  - [`docs/validation/phase6_1_serial_ingestion.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/phase6_1_serial_ingestion.log)
+  - [`ground_station/run_mqtt_ingestion.py`](file:///home/aryan/Projects/SPIT/NEXUS/ground_station/run_mqtt_ingestion.py)
+  - [`ground_station/run_dual_transport_ingestion.py`](file:///home/aryan/Projects/SPIT/NEXUS/ground_station/run_dual_transport_ingestion.py)
+  - [`ground_station/tests/test_run_mqtt_ingestion.py`](file:///home/aryan/Projects/SPIT/NEXUS/ground_station/tests/test_run_mqtt_ingestion.py)
+  - [`docs/validation/milestone6_3_validation_report.md`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/milestone6_3_validation_report.md)
+  - [`docs/validation/m6_3_mqtt_telemetry.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m6_3_mqtt_telemetry.log)
+  - [`docs/validation/m6_3_dual_transport.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m6_3_dual_transport.log)
   - [`docs/validation/milestone6_2c_validation_report.md`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/milestone6_2c_validation_report.md)
-  - [`docs/validation/m6_2c_boot.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m6_2c_boot.log)
-  - [`docs/validation/m6_2c_mqtt_telemetry.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m6_2c_mqtt_telemetry.log)
-  - [`docs/validation/m6_2c_serial_ingestion.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m6_2c_serial_ingestion.log)
+

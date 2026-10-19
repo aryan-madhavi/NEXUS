@@ -61,6 +61,7 @@ Thumbs.db
 docs/validation/soak_mqtt_err_*.log
 tmp/
 temp/
+scratch/
 
 # Local databases and generated telemetry
 *.sqlite
