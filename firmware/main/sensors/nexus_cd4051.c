@@ -67,12 +67,22 @@ bool nexus_cd4051_init(nexus_sensor_registry_t *registry)
     s_cd4051_initialized = true;
 
     /* Register verified channel X0 (HW-870 IR/Gas module) */
-    return nexus_sensor_register(registry,
-                                 NEXUS_SENSOR_ID_MUX_GAS_X0,
-                                 "hw870_x0",
-                                 NEXUS_SENSOR_TYPE_ANALOG_MUX,
-                                 0U, /* Channel X0 */
-                                 NEXUS_CD4051_INTERVAL_MS);
+    bool ok_x0 = nexus_sensor_register(registry,
+                                       NEXUS_SENSOR_ID_MUX_GAS_X0,
+                                       "hw870_x0",
+                                       NEXUS_SENSOR_TYPE_ANALOG_MUX,
+                                       NEXUS_CD4051_CH_GAS_X0,
+                                       NEXUS_CD4051_INTERVAL_MS);
+
+    /* Register verified channel X1 (On-board Hall Effect sensor IC2) */
+    bool ok_x1 = nexus_sensor_register(registry,
+                                       NEXUS_SENSOR_ID_HALL_X1,
+                                       "hall_x1",
+                                       NEXUS_SENSOR_TYPE_ANALOG_MUX,
+                                       NEXUS_CD4051_CH_HALL_X1,
+                                       NEXUS_CD4051_INTERVAL_MS);
+
+    return (ok_x0 && ok_x1);
 }
 
 bool nexus_cd4051_select_channel(uint8_t channel)
@@ -128,7 +138,7 @@ bool nexus_cd4051_acquire_x0(nexus_sensor_registry_t *registry,
     }
 
     int raw_val = 0;
-    if (!nexus_cd4051_sample_channel(0U, &raw_val)) {
+    if (!nexus_cd4051_sample_channel(NEXUS_CD4051_CH_GAS_X0, &raw_val)) {
         nexus_sensor_record_error(registry, NEXUS_SENSOR_ID_MUX_GAS_X0, false);
         return false;
     }
@@ -149,7 +159,7 @@ bool nexus_cd4051_acquire_x0(nexus_sensor_registry_t *registry,
         nexus_sensor_sample_t sample = {
             .sensor_id = NEXUS_SENSOR_ID_MUX_GAS_X0,
             .flags = NEXUS_SAMPLE_FLAG_VALID,
-            .channel = 0U, /* Mux Channel X0 */
+            .channel = NEXUS_CD4051_CH_GAS_X0,
             .timestamp_us = timestamp_us,
             .raw_value = raw_val,
             .processed_value = voltage_mv,
@@ -158,6 +168,60 @@ bool nexus_cd4051_acquire_x0(nexus_sensor_registry_t *registry,
     }
 
     return true;
+}
+
+bool nexus_cd4051_acquire_x1(nexus_sensor_registry_t *registry,
+                             nexus_executive_t *executive,
+                             int64_t timestamp_us)
+{
+    if (!registry) {
+        return false;
+    }
+
+    int raw_val = 0;
+    if (!nexus_cd4051_sample_channel(NEXUS_CD4051_CH_HALL_X1, &raw_val)) {
+        nexus_sensor_record_error(registry, NEXUS_SENSOR_ID_HALL_X1, false);
+        return false;
+    }
+
+    /* Hall effect sensor IC2: publish raw ADC and scaled millivolts;
+     * do not claim calibrated magnetic field (gauss/tesla) without physical calibration. */
+    int32_t voltage_mv = (int32_t)((raw_val * 3300) / 4095);
+
+    nexus_sensor_update_sample(registry,
+                               NEXUS_SENSOR_ID_HALL_X1,
+                               raw_val,
+                               voltage_mv,
+                               NEXUS_SAMPLE_FLAG_VALID,
+                               timestamp_us);
+
+    if (executive) {
+        nexus_sensor_sample_t sample = {
+            .sensor_id = NEXUS_SENSOR_ID_HALL_X1,
+            .flags = NEXUS_SAMPLE_FLAG_VALID,
+            .channel = NEXUS_CD4051_CH_HALL_X1,
+            .timestamp_us = timestamp_us,
+            .raw_value = raw_val,
+            .processed_value = voltage_mv,
+        };
+        nexus_executive_record_sample(executive, &sample);
+    }
+
+    return true;
+}
+
+bool nexus_cd4051_acquire_all(nexus_sensor_registry_t *registry,
+                              nexus_executive_t *executive,
+                              int64_t timestamp_us)
+{
+    if (!registry) {
+        return false;
+    }
+
+    bool ok_x0 = nexus_cd4051_acquire_x0(registry, executive, timestamp_us);
+    bool ok_x1 = nexus_cd4051_acquire_x1(registry, executive, timestamp_us);
+
+    return (ok_x0 || ok_x1);
 }
 
 bool nexus_cd4051_job_fn(void *user_ctx)
@@ -178,5 +242,5 @@ bool nexus_cd4051_job_fn(void *user_ctx)
     }
 #endif
 
-    return nexus_cd4051_acquire_x0(ctx->registry, ctx->executive, now_us);
+    return nexus_cd4051_acquire_all(ctx->registry, ctx->executive, now_us);
 }

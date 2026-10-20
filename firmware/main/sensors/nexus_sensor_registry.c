@@ -110,6 +110,7 @@ bool nexus_sensor_record_error(nexus_sensor_registry_t *reg, uint16_t sensor_id,
         desc->timeout_count++;
     }
     desc->sample_flags |= (NEXUS_SAMPLE_FLAG_ERROR | NEXUS_SAMPLE_FLAG_STALE);
+    desc->sample_flags &= ~NEXUS_SAMPLE_FLAG_VALID;
 
     return true;
 }

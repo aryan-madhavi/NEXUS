@@ -47,6 +47,20 @@ bool nexus_envelope_format_telemetry(nexus_envelope_t *env,
                                      int32_t dht_hum,
                                      bool dht_valid);
 
+/* Extended telemetry envelope formatting supporting M9 sensors (X1 Hall, MOC7811 slot, HC-SR04 distance).
+ * Any optional sensor value < 0 is omitted from the JSON payload to preserve bandwidth and backwards compatibility. */
+bool nexus_envelope_format_telemetry_ext(nexus_envelope_t *env,
+                                         uint32_t seq,
+                                         int64_t uptime_ms,
+                                         int32_t ldr_raw,
+                                         int32_t mux_x0_raw,
+                                         int32_t mux_x1_raw,
+                                         int32_t dht_temp,
+                                         int32_t dht_hum,
+                                         bool dht_valid,
+                                         int32_t slot_state,
+                                         int32_t dist_cm);
+
 bool nexus_envelope_format_event(nexus_envelope_t *env,
                                  uint32_t seq,
                                  int64_t uptime_ms,

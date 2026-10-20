@@ -298,6 +298,34 @@ bool nexus_conn_mgr_send_heartbeat(nexus_conn_mgr_t *mgr,
     return nexus_conn_mgr_enqueue(mgr, &env, route);
 }
 
+bool nexus_conn_mgr_send_telemetry_ext(nexus_conn_mgr_t *mgr,
+                                       int64_t uptime_ms,
+                                       int32_t ldr_raw,
+                                       int32_t mux_x0_raw,
+                                       int32_t mux_x1_raw,
+                                       int32_t dht_temp,
+                                       int32_t dht_hum,
+                                       bool dht_valid,
+                                       int32_t slot_state,
+                                       int32_t dist_cm,
+                                       nexus_route_policy_t route)
+{
+    if (!mgr) {
+        return false;
+    }
+
+    nexus_envelope_t env;
+    uint32_t seq = mgr->next_seq++;
+    if (!nexus_envelope_format_telemetry_ext(&env, seq, uptime_ms,
+                                            ldr_raw, mux_x0_raw, mux_x1_raw,
+                                            dht_temp, dht_hum, dht_valid,
+                                            slot_state, dist_cm)) {
+        return false;
+    }
+
+    return nexus_conn_mgr_enqueue(mgr, &env, route);
+}
+
 bool nexus_conn_mgr_send_telemetry(nexus_conn_mgr_t *mgr,
                                    int64_t uptime_ms,
                                    int32_t ldr_raw,
@@ -307,17 +335,10 @@ bool nexus_conn_mgr_send_telemetry(nexus_conn_mgr_t *mgr,
                                    bool dht_valid,
                                    nexus_route_policy_t route)
 {
-    if (!mgr) {
-        return false;
-    }
-
-    nexus_envelope_t env;
-    uint32_t seq = mgr->next_seq++;
-    if (!nexus_envelope_format_telemetry(&env, seq, uptime_ms, ldr_raw, mux_x0_raw, dht_temp, dht_hum, dht_valid)) {
-        return false;
-    }
-
-    return nexus_conn_mgr_enqueue(mgr, &env, route);
+    return nexus_conn_mgr_send_telemetry_ext(mgr, uptime_ms,
+                                            ldr_raw, mux_x0_raw, -1,
+                                            dht_temp, dht_hum, dht_valid,
+                                            -1, -1, route);
 }
 
 bool nexus_conn_mgr_send_status(nexus_conn_mgr_t *mgr,

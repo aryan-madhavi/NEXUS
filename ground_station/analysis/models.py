@@ -38,6 +38,9 @@ SIGNAL_CATALOG: Dict[str, Tuple[str, str]] = {
     "hum": ("nexus_telem", "hum"),
     "ldr_raw": ("nexus_telem", "ldr_raw"),
     "x0_raw": ("nexus_telem", "x0_raw"),
+    "x1_raw": ("nexus_telem", "x1_raw"),
+    "slot_state": ("nexus_telem", "slot_state"),
+    "dist_cm": ("nexus_telem", "dist_cm"),
     "dht_valid": ("nexus_telem", "dht_valid"),
     # Executive heartbeat & health (nexus_hb)
     "free_heap": ("nexus_hb", "free_heap"),
@@ -65,7 +68,7 @@ ALLOWED_MEASUREMENTS: Set[str] = {
 }
 
 ALLOWED_FIELDS_BY_MEASUREMENT: Dict[str, Set[str]] = {
-    "nexus_telem": {"temp", "hum", "ldr_raw", "x0_raw", "dht_valid", "seq", "uptime_ms"},
+    "nexus_telem": {"temp", "hum", "ldr_raw", "x0_raw", "x1_raw", "slot_state", "dist_cm", "dht_valid", "seq", "uptime_ms"},
     "nexus_hb": {"free_heap", "exec_ticks", "seq", "uptime_ms"},
     "nexus_status": {"dispatched", "completed", "failed", "max_lat_us", "max_dur_us", "seq", "uptime_ms"},
     "nexus_event": {"event_type", "severity", "source_id", "payload_val", "seq", "uptime_ms"},

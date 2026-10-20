@@ -80,6 +80,19 @@ class TestPointMapper(unittest.TestCase):
         self.assertNotIn("temp", data["fields"])
         self.assertNotIn("hum", data["fields"])
 
+    def test_telemetry_mapping_m9_extended(self):
+        raw = (
+            '{"ver":1,"dev":"nexus_esp32","seq":25,"type":"telem","uptime":15500,'
+            '"ldr":1250,"x0":2150,"x1":1800,"slot":0,"dist":15.5,"dht_valid":false}\n'
+        )
+        env = EnvelopeParser.parse(raw)
+        data = PointMapper.to_dict(env)
+        self.assertEqual(data["fields"]["x1_raw"], 1800)
+        self.assertEqual(data["fields"]["slot_state"], 0)
+        self.assertEqual(data["fields"]["dist_cm"], 15.5)
+        self.assertNotIn("temp", data["fields"])
+        self.assertNotIn("hum", data["fields"])
+
     def test_status_mapping(self):
         raw = (
             '{"ver":1,"dev":"nexus_esp32","seq":30,"type":"status","uptime":20000,'

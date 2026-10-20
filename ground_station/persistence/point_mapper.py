@@ -91,6 +91,13 @@ class PointMapper:
                 if payload.hum is not None:
                     fields["hum"] = float(payload.hum)
 
+            if payload.x1_raw is not None:
+                fields["x1_raw"] = int(payload.x1_raw)
+            if payload.slot_state is not None:
+                fields["slot_state"] = int(payload.slot_state)
+            if payload.dist_cm is not None:
+                fields["dist_cm"] = float(payload.dist_cm)
+
         elif isinstance(payload, StatusPayload):
             fields["dispatched"] = int(payload.dispatched)
             fields["completed"] = int(payload.completed)

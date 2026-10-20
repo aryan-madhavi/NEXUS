@@ -21,6 +21,9 @@ extern "C" {
 #define NEXUS_CD4051_INTERVAL_MS   1000U
 #define NEXUS_CD4051_SETTLE_US     20U
 
+#define NEXUS_CD4051_CH_GAS_X0     0U
+#define NEXUS_CD4051_CH_HALL_X1    1U
+
 /* Initialize CD4051 GPIO select lines and register active mux channels with sensor registry. */
 bool nexus_cd4051_init(nexus_sensor_registry_t *registry);
 
@@ -35,7 +38,17 @@ bool nexus_cd4051_acquire_x0(nexus_sensor_registry_t *registry,
                              nexus_executive_t *executive,
                              int64_t timestamp_us);
 
-/* Executive Priority Class 1 job callback for CD4051 X0 */
+/* Acquire X1 (Hall Effect IC2) analog sample, update registry, record to executive ring buffer. */
+bool nexus_cd4051_acquire_x1(nexus_sensor_registry_t *registry,
+                             nexus_executive_t *executive,
+                             int64_t timestamp_us);
+
+/* Acquire all active channels (X0 and X1) sequentially with settling delay. */
+bool nexus_cd4051_acquire_all(nexus_sensor_registry_t *registry,
+                              nexus_executive_t *executive,
+                              int64_t timestamp_us);
+
+/* Executive Priority Class 1 job callback for CD4051 multi-channel acquisition */
 bool nexus_cd4051_job_fn(void *user_ctx);
 
 #ifndef ESP_PLATFORM

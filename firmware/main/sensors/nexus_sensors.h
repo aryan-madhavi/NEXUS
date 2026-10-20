@@ -6,12 +6,14 @@
 #include "nexus_adc_ldr.h"
 #include "nexus_cd4051.h"
 #include "nexus_dht11.h"
+#include "nexus_moc7811.h"
+#include "nexus_hcsr04.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Initialize all verified Milestone 3 sensors (LDR, CD4051, DHT11) */
+/* Initialize all verified sensors (LDR, CD4051 X0/X1, DHT11, MOC7811, HC-SR04) */
 bool nexus_sensors_init(nexus_sensor_registry_t *registry);
 
 /* Register all sensor acquisition jobs as Priority Class 1 periodic tasks in the executive */

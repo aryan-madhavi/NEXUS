@@ -86,6 +86,90 @@ bool nexus_envelope_format_heartbeat(nexus_envelope_t *env,
     return true;
 }
 
+bool nexus_envelope_format_telemetry_ext(nexus_envelope_t *env,
+                                         uint32_t seq,
+                                         int64_t uptime_ms,
+                                         int32_t ldr_raw,
+                                         int32_t mux_x0_raw,
+                                         int32_t mux_x1_raw,
+                                         int32_t dht_temp,
+                                         int32_t dht_hum,
+                                         bool dht_valid,
+                                         int32_t slot_state,
+                                         int32_t dist_cm)
+{
+    if (!env) {
+        return false;
+    }
+
+    env->seq = seq;
+    env->type = NEXUS_MSG_TYPE_TELEMETRY;
+
+    char *buf = (char *)env->buffer;
+    size_t cap = NEXUS_ENVELOPE_MAX_LEN;
+    int written = snprintf(buf, cap,
+                           "{\"ver\":%u,\"dev\":\"%s\",\"seq\":%" PRIu32
+                           ",\"type\":\"telem\",\"uptime\":%" PRId64
+                           ",\"ldr\":%" PRId32 ",\"x0\":%" PRId32,
+                           NEXUS_PROTOCOL_VERSION, NEXUS_DEVICE_ID_DEFAULT,
+                           seq, uptime_ms, ldr_raw, mux_x0_raw);
+    if (written < 0 || (size_t)written >= cap) {
+        env->length = 0;
+        return false;
+    }
+    size_t offset = (size_t)written;
+
+    if (mux_x1_raw >= 0) {
+        written = snprintf(buf + offset, cap - offset, ",\"x1\":%" PRId32, mux_x1_raw);
+        if (written < 0 || (size_t)written >= (cap - offset)) {
+            env->length = 0;
+            return false;
+        }
+        offset += (size_t)written;
+    }
+
+    if (dht_valid) {
+        written = snprintf(buf + offset, cap - offset,
+                           ",\"temp\":%" PRId32 ",\"hum\":%" PRId32 ",\"dht_valid\":true",
+                           dht_temp, dht_hum);
+    } else {
+        written = snprintf(buf + offset, cap - offset, ",\"dht_valid\":false");
+    }
+    if (written < 0 || (size_t)written >= (cap - offset)) {
+        env->length = 0;
+        return false;
+    }
+    offset += (size_t)written;
+
+    if (slot_state >= 0) {
+        written = snprintf(buf + offset, cap - offset, ",\"slot\":%" PRId32, slot_state);
+        if (written < 0 || (size_t)written >= (cap - offset)) {
+            env->length = 0;
+            return false;
+        }
+        offset += (size_t)written;
+    }
+
+    if (dist_cm >= 0) {
+        written = snprintf(buf + offset, cap - offset, ",\"dist\":%" PRId32, dist_cm);
+        if (written < 0 || (size_t)written >= (cap - offset)) {
+            env->length = 0;
+            return false;
+        }
+        offset += (size_t)written;
+    }
+
+    written = snprintf(buf + offset, cap - offset, "}\n");
+    if (written < 0 || (size_t)written >= (cap - offset)) {
+        env->length = 0;
+        return false;
+    }
+    offset += (size_t)written;
+
+    env->length = (uint16_t)offset;
+    return true;
+}
+
 bool nexus_envelope_format_telemetry(nexus_envelope_t *env,
                                      uint32_t seq,
                                      int64_t uptime_ms,
@@ -95,40 +179,10 @@ bool nexus_envelope_format_telemetry(nexus_envelope_t *env,
                                      int32_t dht_hum,
                                      bool dht_valid)
 {
-    if (!env) {
-        return false;
-    }
-
-    env->seq = seq;
-    env->type = NEXUS_MSG_TYPE_TELEMETRY;
-
-    int written;
-    if (dht_valid) {
-        written = snprintf((char *)env->buffer, NEXUS_ENVELOPE_MAX_LEN,
-                           "{\"ver\":%u,\"dev\":\"%s\",\"seq\":%" PRIu32
-                           ",\"type\":\"telem\",\"uptime\":%" PRId64
-                           ",\"ldr\":%" PRId32 ",\"x0\":%" PRId32
-                           ",\"temp\":%" PRId32 ",\"hum\":%" PRId32
-                           ",\"dht_valid\":true}\n",
-                           NEXUS_PROTOCOL_VERSION, NEXUS_DEVICE_ID_DEFAULT,
-                           seq, uptime_ms, ldr_raw, mux_x0_raw, dht_temp, dht_hum);
-    } else {
-        written = snprintf((char *)env->buffer, NEXUS_ENVELOPE_MAX_LEN,
-                           "{\"ver\":%u,\"dev\":\"%s\",\"seq\":%" PRIu32
-                           ",\"type\":\"telem\",\"uptime\":%" PRId64
-                           ",\"ldr\":%" PRId32 ",\"x0\":%" PRId32
-                           ",\"dht_valid\":false}\n",
-                           NEXUS_PROTOCOL_VERSION, NEXUS_DEVICE_ID_DEFAULT,
-                           seq, uptime_ms, ldr_raw, mux_x0_raw);
-    }
-
-    if (written <= 0 || (size_t)written >= NEXUS_ENVELOPE_MAX_LEN) {
-        env->length = 0;
-        return false;
-    }
-
-    env->length = (uint16_t)written;
-    return true;
+    return nexus_envelope_format_telemetry_ext(env, seq, uptime_ms,
+                                               ldr_raw, mux_x0_raw, -1,
+                                               dht_temp, dht_hum, dht_valid,
+                                               -1, -1);
 }
 
 bool nexus_envelope_format_event(nexus_envelope_t *env,

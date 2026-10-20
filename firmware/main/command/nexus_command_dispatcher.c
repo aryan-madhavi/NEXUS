@@ -250,16 +250,24 @@ static bool execute_supported_command(nexus_command_dispatcher_t *disp,
 
     case NEXUS_CMD_DISPLAY_ANALOG: {
         int32_t x0_val = 0;
-        bool fresh = false;
+        bool fresh_x0 = false;
+        int32_t x1_val = 0;
+        bool fresh_x1 = false;
         if (disp->sensors) {
-            nexus_sensor_descriptor_t *d_mux = nexus_sensor_get(disp->sensors, NEXUS_SENSOR_ID_MUX_GAS_X0);
-            if (d_mux) {
-                x0_val = d_mux->latest_raw;
-                fresh = (d_mux->sample_count > 0 && d_mux->error_count == 0);
+            nexus_sensor_descriptor_t *d_mux_x0 = nexus_sensor_get(disp->sensors, NEXUS_SENSOR_ID_MUX_GAS_X0);
+            if (d_mux_x0) {
+                x0_val = d_mux_x0->latest_raw;
+                fresh_x0 = (d_mux_x0->sample_count > 0 && d_mux_x0->error_count == 0);
+            }
+            nexus_sensor_descriptor_t *d_mux_x1 = nexus_sensor_get(disp->sensors, NEXUS_SENSOR_ID_HALL_X1);
+            if (d_mux_x1) {
+                x1_val = d_mux_x1->latest_raw;
+                fresh_x1 = (d_mux_x1->sample_count > 0 && d_mux_x1->error_count == 0);
             }
         }
-        snprintf(extra, sizeof(extra), "\"mux_x0\":%" PRId32 ",\"valid\":%s",
-                 x0_val, fresh ? "true" : "false");
+        snprintf(extra, sizeof(extra), "\"mux_x0\":%" PRId32 ",\"valid\":%s,\"mux_x1\":%" PRId32 ",\"valid_x1\":%s",
+                 x0_val, fresh_x0 ? "true" : "false",
+                 x1_val, fresh_x1 ? "true" : "false");
         msg = "Analog readings";
         break;
     }
@@ -284,14 +292,21 @@ static bool execute_supported_command(nexus_command_dispatcher_t *disp,
     case NEXUS_CMD_DIAGNOSTICS_SENSORS: {
         uint32_t total_reads = 0;
         uint32_t total_errs = 0;
+        uint16_t reg_count = 0;
+        uint16_t valid_cnt = 0;
         if (disp->sensors) {
+            reg_count = disp->sensors->count;
             for (uint16_t i = 0; i < disp->sensors->count; ++i) {
                 total_reads += disp->sensors->entries[i].sample_count;
                 total_errs += disp->sensors->entries[i].error_count;
+                if ((disp->sensors->entries[i].sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+                    (disp->sensors->entries[i].sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0) {
+                    valid_cnt++;
+                }
             }
         }
-        snprintf(extra, sizeof(extra), "\"reads\":%" PRIu32 ",\"errors\":%" PRIu32,
-                 total_reads, total_errs);
+        snprintf(extra, sizeof(extra), "\"registered\":%u,\"valid_sensors\":%u,\"reads\":%" PRIu32 ",\"errors\":%" PRIu32,
+                 reg_count, valid_cnt, total_reads, total_errs);
         msg = "Sensor diagnostics";
         break;
     }

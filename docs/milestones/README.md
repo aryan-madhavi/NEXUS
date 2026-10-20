@@ -112,6 +112,15 @@ This directory contains the sequential, fully documented technical records of ev
   - Physical boundary analysis: Explicitly separated ESP32-originated commands, laptop-originated commands, and documented the physical board-side input gap (GPIO1/UART0 conflict; absence of keypad).
 - **Outcome**: **38/38 C Host Tests PASS** (100%), **215/215 Python Tests PASS** (100%), clean ESP-IDF compilation (`nexus.bin`, 0xe1ca0 bytes). Milestone 8 is **IMPLEMENTED & VERIFIED**.
 
+### [Milestone 9 — Extended Sensor Integration (CD4051 X1, MOC7811, HC-SR04)](MILESTONE_9.md)
+- **Objective**: Integrate CD4051 Channel X1 Hall effect sensor, MOC7811 optical slot sensor, and HC-SR04 ultrasonic sensor with timing and electrical safety across firmware, Ground Station, InfluxDB, and AI layer.
+- **Key Deliverables**:
+  - Reconciled 3 core engineering constraints: capacity verified at 7 sensors ($7 \le 8$), envelope ceiling verified at 165 bytes ($165 < 256$), and executive timing verified within 10 ms deadline.
+  - Driver implementations: CD4051 X1 serialized acquisition, MOC7811 digital driver on GPI GPIO34 with external pull-up handling, and HC-SR04 driver on Trig GPIO25 / Echo GPIO26 with sound-speed arithmetic ($echo\_us / 58$) and default 5V echo pulse safety inhibitor (`NEXUS_HCSR04_STATUS_UNVERIFIED_VOLTAGE`).
+  - Command updates: `DISPLAY ANALOG` (`0x1044`) reports X0 and X1; `DIAGNOSTICS SENSORS` (`0x1802`) reports registered count, valid sensors count, total reads, and error counts.
+  - Full pipeline telemetry: Protocol v1 extended telemetry serialization (`x1`, `slot`, `dist`), backward-compatible Ground Station parser, InfluxDB point mapping, and AI tool grounding (`x1_raw_adc`, `slot_state`, `dist_cm`).
+- **Outcome**: **44/44 C Host Tests PASS** (100%), **217/217 Python Tests PASS** (100%), clean ESP-IDF compilation (`nexus.bin`, 0xe2650 bytes). Milestone 9 is **IMPLEMENTED & VERIFIED**.
+
 ---
 
 ## 3. Subsystem Dependency & Progression Graph
@@ -128,9 +137,9 @@ flowchart TD
     M6[Milestone 6: Authenticated Dual-Transport Hardware Validation]
     M7[Milestone 7: Telemetry Analysis, Monitoring & Conversational AI]
     M8[Milestone 8: Canonical Command Engine & Laptop Launcher]
+    M9[Milestone 9: Extended Sensor Integration & Observability]
     
     subgraph Future Roadmap
-        M9[Milestone 9: Multi-Sensor Multiplexing & Sensor Expansion]
         M10[Milestone 10: Final Qualification & Production Release]
     end
 
@@ -143,15 +152,15 @@ flowchart TD
     M5 -->|Live Telemetry Ingestion Pipeline| M6
     M6 -->|Telemetry & InfluxDB Persistence| M7
     M7 -->|Observability & Anomaly Bedrock| M8
-    M6 -.->|Future Actuation Path| M6_3
+    M8 -->|Command Engine & Dispatcher| M9
+    M9 -->|Sensor Suite & Full Pipeline| M10
 
     classDef done fill:#2e7d32,stroke:#1b5e20,color:#ffffff;
     classDef pending fill:#f57f17,stroke:#bc5100,color:#ffffff;
     classDef future fill:#37474f,stroke:#263238,color:#ffffff;
     
-    class M1,M2,M3,M3_1,M4,M4_Gate,M5,M6,M7 done;
-    class M8 pending;
-    class M6_3 future;
+    class M1,M2,M3,M3_1,M4,M4_Gate,M5,M6,M7,M8,M9 done;
+    class M10 future;
 ```
 
 ---
@@ -175,14 +184,9 @@ To prevent ambiguity regarding what has been physically demonstrated versus simu
 
 ## 5. Future Development Roadmap
 
-Following the completion and validation of Milestone 7:
-- **Milestone 8 — Multi-Sensor Multiplexing & Extended Hardware Qualification (NEXT)**:
-  - Activate remaining multiplexer channels on the CD4051 (Channels X1 through X7) to support expanded gas and analog sensor suites.
-  - Formulate multi-channel ADC sampling schedules within the cyclic executive without violating execution budgets.
-  - Expand InfluxDB schemas and Grafana dashboards for multi-channel gas analysis.
-  - Extend deterministic monitoring rules to correlate multi-sensor thermal and chemical gradients.
-- **Milestone 6.3 — Bidirectional Command Protocol & Command Registry**:
-  - Formal command dispatch table on ESP32 (`nexus_command_registry`).
-  - Inbound command reception on `nexus/<device_id>/cmd` via `nexus_wifi_mqtt_rx_handler_t`.
-  - Secure command parsing and execution inside the cyclic executive (`LED`, `BUZ`, `RATE`, `RESET`, `CALIB`).
-  - Host-to-device command acknowledgments and execution responses (`resp` envelopes).
+Following the completion and software sign-off of Milestone 9:
+- **Milestone 10 — Final Qualification & Production Release (NEXT)**:
+  - **Hardware Qualification**: Validate 3.3V voltage divider on HC-SR04 Echo (GPIO26), external pull-up and polarity on MOC7811 (GPIO34), and live ADC baseline on CD4051 X1 Hall-effect sensor.
+  - **Endurance Soak Campaign**: Execute an extended dual-transport soak test validating zero-drop telemetry ingestion over physical Serial and authenticated MQTT.
+  - **Dashboard & Alert Finalization**: Finalize Grafana dashboards and deterministic alerting thresholds incorporating all 7 active sensor signals.
+  - **Release Baseline**: Final production tagging, reproducible build verification, and project release sign-off.

@@ -192,9 +192,15 @@ class NexusAITools:
                     "dht_valid": dht_valid,
                     "ldr_raw": fields.get("ldr_raw"),
                     "x0_raw_adc": fields.get("x0_raw"),
+                    "x1_raw_adc": fields.get("x1_raw"),
+                    "slot_state": fields.get("slot_state"),
+                    "dist_cm": fields.get("dist_cm"),
                 },
                 "notes": [
-                    "x0_raw_adc is the raw numeric ADC count from MUX input 0; state the numeric count directly as uncalibrated raw ADC, not calibrated gas ppm.",
+                    "x0_raw_adc is the raw numeric ADC count from MUX input 0 (Gas sensor); state numeric count as uncalibrated raw ADC, not calibrated gas ppm.",
+                    "x1_raw_adc is the raw numeric ADC count from MUX input 1 (Hall-effect magnetic sensor); state numeric count as uncalibrated raw ADC, not calibrated Gauss/Tesla.",
+                    "slot_state is the optical slot sensor state (0 = unblocked, 1 = blocked).",
+                    "dist_cm is ultrasonic distance in cm (null or negative indicates unverified voltage hazard or inhibited acquisition).",
                     "temperature_c and humidity_pct are null if dht_valid is False to prevent invalid sensor usage.",
                 ],
             }

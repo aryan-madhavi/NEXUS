@@ -11,6 +11,8 @@ idf_component_register(
         "sensors/nexus_adc_ldr.c"
         "sensors/nexus_cd4051.c"
         "sensors/nexus_dht11.c"
+        "sensors/nexus_moc7811.c"
+        "sensors/nexus_hcsr04.c"
         "sensors/nexus_sensors.c"
         "transports/nexus_transport.c"
         "transports/nexus_envelope.c"

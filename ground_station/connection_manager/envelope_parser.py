@@ -166,6 +166,9 @@ class TelemetryPayload:
     hum: Optional[float]
     suppressed_temp: Optional[float] = None
     suppressed_hum: Optional[float] = None
+    x1_raw: Optional[int] = None
+    slot_state: Optional[int] = None
+    dist_cm: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -458,6 +461,34 @@ class EnvelopeParser:
                     if _is_finite_number(parsed_json["hum"]):
                         suppressed_hum = float(parsed_json["hum"])
 
+            x1_val: Optional[int] = None
+            if "x1" in parsed_json:
+                x1_raw_in = parsed_json["x1"]
+                if not _is_int(x1_raw_in):
+                    raise FieldTypeError("x1", "integer", x1_raw_in)
+                if x1_raw_in < INT32_MIN or x1_raw_in > INT32_MAX:
+                    raise FieldRangeError("x1", INT32_MIN, INT32_MAX, x1_raw_in)
+                x1_val = x1_raw_in
+                consumed_keys.add("x1")
+
+            slot_val: Optional[int] = None
+            if "slot" in parsed_json:
+                s_in = parsed_json["slot"]
+                if not _is_int(s_in):
+                    raise FieldTypeError("slot", "integer", s_in)
+                if s_in < INT32_MIN or s_in > INT32_MAX:
+                    raise FieldRangeError("slot", INT32_MIN, INT32_MAX, s_in)
+                slot_val = s_in
+                consumed_keys.add("slot")
+
+            dist_val: Optional[float] = None
+            if "dist" in parsed_json:
+                d_in = parsed_json["dist"]
+                if not _is_finite_number(d_in):
+                    raise FieldTypeError("dist", "finite number", d_in)
+                dist_val = float(d_in)
+                consumed_keys.add("dist")
+
             payload = TelemetryPayload(
                 uptime_ms=uptime_ms,
                 ldr_raw=ldr_val,
@@ -467,6 +498,9 @@ class EnvelopeParser:
                 hum=hum_out,
                 suppressed_temp=suppressed_temp,
                 suppressed_hum=suppressed_hum,
+                x1_raw=x1_val,
+                slot_state=slot_val,
+                dist_cm=dist_val,
             )
 
         elif msg_type == MessageType.STATUS:

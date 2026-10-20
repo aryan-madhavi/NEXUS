@@ -59,6 +59,16 @@ class TestEnvelopeParser(unittest.TestCase):
         self.assertIsNone(env.payload.temp)
         self.assertIsNone(env.payload.hum)
 
+    def test_valid_telemetry_extended_m9(self):
+        raw = '{"ver":1,"dev":"nexus_esp32","seq":105,"type":"telem","uptime":12360,"ldr":2048,"x0":1024,"x1":1850,"slot":1,"dist":42.5,"temp":25,"hum":60,"dht_valid":true}\n'
+        env = EnvelopeParser.parse(raw)
+        self.assertEqual(env.msg_type, MessageType.TELEMETRY)
+        self.assertIsInstance(env.payload, TelemetryPayload)
+        self.assertEqual(env.payload.x1_raw, 1850)
+        self.assertEqual(env.payload.slot_state, 1)
+        self.assertEqual(env.payload.dist_cm, 42.5)
+        self.assertEqual(len(env.extra_fields), 0)
+
     def test_telemetry_dht_degraded_suppresses_fabricated_temp_hum(self):
         # Even if temp/hum are present in the envelope, when dht_valid is false,
         # the parser must NOT expose them as valid readings.

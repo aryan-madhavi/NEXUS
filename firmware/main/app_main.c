@@ -146,17 +146,26 @@ static bool job_connection_telemetry(void *user_ctx)
     const int64_t uptime_us = esp_timer_get_time();
     int32_t ldr_raw = 0;
     int32_t mux_x0_raw = 0;
+    int32_t mux_x1_raw = -1;
     int32_t dht_temp = 0;
     int32_t dht_hum = 0;
     bool dht_valid = false;
+    int32_t slot_state = -1;
+    int32_t dist_cm = -1;
 
     nexus_sensor_descriptor_t *s_ldr = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_LDR);
     if (s_ldr) {
         ldr_raw = s_ldr->latest_raw;
     }
-    nexus_sensor_descriptor_t *s_mux = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_MUX_GAS_X0);
-    if (s_mux) {
-        mux_x0_raw = s_mux->latest_raw;
+    nexus_sensor_descriptor_t *s_mux_x0 = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_MUX_GAS_X0);
+    if (s_mux_x0) {
+        mux_x0_raw = s_mux_x0->latest_raw;
+    }
+    nexus_sensor_descriptor_t *s_mux_x1 = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_HALL_X1);
+    if (s_mux_x1 && s_mux_x1->sample_count > 0 &&
+        (s_mux_x1->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+        (s_mux_x1->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0) {
+        mux_x1_raw = s_mux_x1->latest_raw;
     }
     nexus_sensor_descriptor_t *s_temp = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_DHT11_TEMP);
     nexus_sensor_descriptor_t *s_hum = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_DHT11_HUM);
@@ -174,15 +183,30 @@ static bool job_connection_telemetry(void *user_ctx)
             dht_valid = true;
         }
     }
+    nexus_sensor_descriptor_t *s_moc = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_MOC7811);
+    if (s_moc && s_moc->sample_count > 0 &&
+        (s_moc->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+        (s_moc->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0) {
+        slot_state = s_moc->latest_processed;
+    }
+    nexus_sensor_descriptor_t *s_dist = nexus_sensor_get(&s_sensor_registry, NEXUS_SENSOR_ID_HCSR04);
+    if (s_dist && s_dist->sample_count > 0 &&
+        (s_dist->sample_flags & NEXUS_SAMPLE_FLAG_VALID) != 0 &&
+        (s_dist->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0) {
+        dist_cm = s_dist->latest_processed;
+    }
 
-    nexus_conn_mgr_send_telemetry(&s_conn_mgr,
-                                  uptime_us / 1000LL,
-                                  ldr_raw,
-                                  mux_x0_raw,
-                                  dht_temp,
-                                  dht_hum,
-                                  dht_valid,
-                                  NEXUS_ROUTE_AUTO);
+    nexus_conn_mgr_send_telemetry_ext(&s_conn_mgr,
+                                      uptime_us / 1000LL,
+                                      ldr_raw,
+                                      mux_x0_raw,
+                                      mux_x1_raw,
+                                      dht_temp,
+                                      dht_hum,
+                                      dht_valid,
+                                      slot_state,
+                                      dist_cm,
+                                      NEXUS_ROUTE_AUTO);
     return true;
 }
 

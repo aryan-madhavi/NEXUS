@@ -179,6 +179,18 @@ bool nexus_conn_mgr_send_telemetry(nexus_conn_mgr_t *mgr,
                                    bool dht_valid,
                                    nexus_route_policy_t route);
 
+bool nexus_conn_mgr_send_telemetry_ext(nexus_conn_mgr_t *mgr,
+                                       int64_t uptime_ms,
+                                       int32_t ldr_raw,
+                                       int32_t mux_x0_raw,
+                                       int32_t mux_x1_raw,
+                                       int32_t dht_temp,
+                                       int32_t dht_hum,
+                                       bool dht_valid,
+                                       int32_t slot_state,
+                                       int32_t dist_cm,
+                                       nexus_route_policy_t route);
+
 bool nexus_conn_mgr_send_status(nexus_conn_mgr_t *mgr,
                                 int64_t uptime_ms,
                                 uint32_t dispatched,
