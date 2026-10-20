@@ -17,8 +17,11 @@ idf_component_register(
         "transports/nexus_serial_transport.c"
         "transports/nexus_wifi_mqtt_transport.c"
         "transports/nexus_connection_manager.c"
+        "command/nexus_command_registry.c"
+        "command/nexus_command_dispatcher.c"
     INCLUDE_DIRS
         "."
+        "command"
         "data_structures"
         "executive"
         "sensors"

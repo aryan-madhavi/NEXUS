@@ -18,6 +18,7 @@ This directory contains the sequential, fully documented technical records of ev
 | **M5** | [**MILESTONE_5.md**](MILESTONE_5.md) | Python Ground Station, InfluxDB Persistence & Grafana Observability | **ACCEPTED & COMMITTED** | 99 Unit Tests (100% pass) + Physical Serial Log | `59b2864`, `7243003`, [`run_serial_ingestion.py`](../../ground_station/run_serial_ingestion.py), [`phase6_1_serial_ingestion.log`](../validation/phase6_1_serial_ingestion.log) |
 | **M6** | [**MILESTONE_6.md**](MILESTONE_6.md) | Secure Wi-Fi/MQTT Transport, Broker Authentication & End-to-End Acceptance | **COMPLETE — PHYSICALLY VERIFIED** | 10/10 Physical Hardware Acceptance Criteria PASS (Multi-Transport + Live InfluxDB & Grafana) | `8f53877`, `ee20f8d`, `7243003`, [`milestone6_3_validation_report.md`](../validation/milestone6_3_validation_report.md), [`m6_3_mqtt_telemetry.log`](../validation/m6_3_mqtt_telemetry.log) |
 | **M7** | [**MILESTONE_7.md**](MILESTONE_7.md) | Telemetry Analysis, Deterministic Incident Monitoring & Conversational AI | **ACCEPTED & COMMITTED** | 210/210 Regression Tests PASS + Open WebUI Tool Round-Trip + Physical Hardware InfluxDB Persistence | `3cc3426`, `42f4c08`, `54c1319`, `bc7cf0d`, `a445a3f`, [`M7_FINAL_CLOSURE.md`](../validation/M7_FINAL_CLOSURE.md) |
+| **M8** | [**MILESTONE_8.md**](MILESTONE_8.md) | Canonical Command Engine, Bidirectional Protocol & Laptop Launcher | **IMPLEMENTED & VERIFIED** | 38/38 C Host Tests (100%) + 215/215 PyTest (100%) + ESP-IDF Build PASS | [`nexus_command_registry.c`](../../firmware/main/command/nexus_command_registry.c), [`application_launcher.py`](../../ground_station/command_router/application_launcher.py), [`MILESTONE_8.md`](MILESTONE_8.md) |
 | **Hist** | [**PROJECT_HISTORY.md**](PROJECT_HISTORY.md) | Chronological Project History & Architectural Evolution | **CURRENT** | Synthesis of all repository milestones | [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) |
 
 ---
@@ -101,6 +102,16 @@ This directory contains the sequential, fully documented technical records of ev
   - **Phase 7.5 (Live Validation & Hardware Acceptance)**: Verified complete physical pipeline (ESP32 $\to$ Mosquitto $\to$ Ground Station $\to$ InfluxDB $\to$ Grafana) with 32 consecutive frames, InfluxDB persistence, Grafana panel query, and live Open WebUI tool-call round-trip with Mistral 7B. Disambiguated uncalibrated raw ADC semantics (`x0_raw_adc`).
 - **Outcome**: **210/210 Regression Tests PASS** in 8.12s; Ruff lint clean. Milestone 7 is **FULLY ACCEPTED & COMMITTED**.
 
+### [Milestone 8 — Canonical Command Engine, Bidirectional Protocol & Laptop Launcher](MILESTONE_8.md)
+- **Objective**: Establish the canonical, deterministic command engine across firmware and Ground Station, enabling remote executive control, diagnostic retrieval, and safe board-to-laptop application launching.
+- **Key Deliverables**:
+  - Authoritative 52-command canonical registry reconciled with `docs/PROJECT_BLUEPRINT.md`: deterministic 16-bit IDs `(verb << 8) | noun`, milestone dispositions, and bounded argument models.
+  - Firmware command parser and dispatcher in `firmware/main/command/`: zero-allocation, bounded 256-byte envelopes, structured responses (`status`, `code`, `msg`, `uptime`), integrated with Connection Manager RX callback.
+  - Safe Ground Station Application Launcher in `ground_station/command_router/application_launcher.py`: allowlisted actions (`DASHBOARD`, `LOGS`, `AI`, `GROUND`), URL scheme/host/port validation, shell injection prevention, and configurable idempotency cooldown suppression.
+  - Bidirectional Command Router in `ground_station/command_router/router.py`: routes inbound `OPEN` commands to launcher, tracks response correlation, and dispatches outbound commands.
+  - Physical boundary analysis: Explicitly separated ESP32-originated commands, laptop-originated commands, and documented the physical board-side input gap (GPIO1/UART0 conflict; absence of keypad).
+- **Outcome**: **38/38 C Host Tests PASS** (100%), **215/215 Python Tests PASS** (100%), clean ESP-IDF compilation (`nexus.bin`, 0xe1ca0 bytes). Milestone 8 is **IMPLEMENTED & VERIFIED**.
+
 ---
 
 ## 3. Subsystem Dependency & Progression Graph
@@ -116,10 +127,11 @@ flowchart TD
     M5[Milestone 5: Ground Station & InfluxDB / Grafana]
     M6[Milestone 6: Authenticated Dual-Transport Hardware Validation]
     M7[Milestone 7: Telemetry Analysis, Monitoring & Conversational AI]
+    M8[Milestone 8: Canonical Command Engine & Laptop Launcher]
     
-    subgraph Active & Future Roadmap
-        M8[Milestone 8: Multi-Sensor Multiplexing & Extended Hardware Qualification]
-        M6_3[Milestone 6.3: Bidirectional Command Protocol & Registry]
+    subgraph Future Roadmap
+        M9[Milestone 9: Multi-Sensor Multiplexing & Sensor Expansion]
+        M10[Milestone 10: Final Qualification & Production Release]
     end
 
     M1 -->|Verified ESP-IDF & Serial Link| M2

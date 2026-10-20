@@ -12,6 +12,7 @@
 #include "nexus_executive.h"
 #include "nexus_sensors.h"
 #include "nexus_connection_manager.h"
+#include "nexus_command_dispatcher.h"
 
 #define EXECUTIVE_TICK_PERIOD_MS 100U
 #define EXECUTIVE_TASK_STACK_WORDS 4096U
@@ -60,6 +61,9 @@ static nexus_sensor_registry_t s_sensor_registry;
 
 /* Global static unified connection manager instance */
 static nexus_conn_mgr_t s_conn_mgr;
+
+/* Global static command dispatcher instance (Priority Class 0 command service) */
+static nexus_command_dispatcher_t s_command_dispatcher;
 
 /* Application periodic heartbeat job (Priority Class 0) */
 static bool job_heartbeat(void *user_ctx)
@@ -293,6 +297,12 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to initialize Unified Connection Manager");
     } else {
         ESP_LOGI(TAG, "Unified Connection Manager initialized successfully");
+
+        /* Initialize Command Dispatcher and attach as Connection Manager RX callback */
+        nexus_command_dispatcher_init(&s_command_dispatcher, &s_executive, &s_sensor_registry, &s_conn_mgr);
+        nexus_conn_mgr_set_rx_callback(&s_conn_mgr, nexus_command_dispatcher_rx_callback, &s_command_dispatcher);
+        ESP_LOGI(TAG, "Command Dispatcher registered as Unified Connection Manager RX callback");
+
         if (!nexus_conn_mgr_start(&s_conn_mgr)) {
             ESP_LOGW(TAG, "Connection manager started with degraded or partial transports");
         } else {
