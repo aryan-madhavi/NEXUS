@@ -47,6 +47,16 @@ timeline
                     : Deterministic SQLite Incident Store (WAL Mode) & Rule Engine
                     : Read-Only Conversational AI (Mistral 7B) & Open WebUI Tools
                     : Live Physical Pipeline & Full Regression Passed (210/210)
+    2026-10-20 : Milestone 8 : Canonical Command Engine & Laptop Launcher
+               : 52-command registry & deterministic 16-bit IDs
+               : Sandboxed Application Launcher with cooldown suppression
+               : Milestone 9 : Extended Sensor Integration (CD4051 X1, MOC7811, HC-SR04)
+               : 5V echo hazard inhibitor & serialized multiplexer acquisition
+               : Extended Protocol v1 telemetry formatting & InfluxDB schema
+               : Milestone 10 : Final Cyber-Physical Qualification & Release Gating
+               : 44/44 C host tests, 236/236 PyTest, 19/19 soak tests (100% PASS)
+               : Live serial ingestion, InfluxDB persistence, Grafana v2 dashboard
+               : Release gating: Software qualified, hardware actions checklisted
 ```
 
 ---
@@ -153,6 +163,37 @@ timeline
 
 ---
 
+### Phase 9: Canonical Command Engine, Bidirectional Protocol & Laptop Launcher (Milestone 8)
+- **Problem**: Inbound control of the embedded executive was previously ad-hoc or absent, risking arbitrary command injection, executive task stalls, and uncoordinated state transitions. Furthermore, operators lacked a secure, sandboxed mechanism to launch host monitoring tools or open diagnostic views directly from board commands.
+- **Architectural Shift**:
+  - **Canonical 52-Command Registry**: Reconciled the entire command space against `docs/PROJECT_BLUEPRINT.md` with unique, deterministic 16-bit IDs `(verb << 8) | noun`, formal argument constraints, and milestone dispositions in `firmware/main/command/nexus_command_registry.c`.
+  - **Zero-Allocation Firmware Dispatcher**: Built `nexus_command_dispatcher.c` operating within bounded 256-byte envelopes. Dispatches system resets, parameter configurations, and sensor/executive diagnostics with structured responses (`code`, `status`, `msg`, `uptime`). Wired the RX path safely to the Connection Manager worker callback.
+  - **Sandboxed Ground Station Application Launcher**: Created `ground_station/command_router/application_launcher.py` with strict allowlists (schemes `http`/`https`, local hosts `127.0.0.1`, permitted ports 3000/8080/8086), subprocess isolation, and configurable idempotency cooldown timers to prevent process storms.
+  - **Bidirectional Command Router**: Implemented `ground_station/command_router/router.py` to route inbound commands from the MCU, correlate outbound command requests with responses, and maintain full bidirectional command-response isolation.
+  - **Verification**: 38/38 C host tests passed (100%), 215/215 Python tests passed (100%), and clean ESP-IDF v6.0.1 compilation (`nexus.bin`, 0xe1ca0 B). Documented physical input gap (UART0 console conflict on GPIO1 and absence of physical matrix keypad).
+
+---
+
+### Phase 10: Extended Sensor Integration & Observability (Milestone 9)
+- **Problem**: Expanding the sensor suite to include CD4051 X1 (Hall Effect IC2), MOC7811 (optical slot), and HC-SR04 (ultrasonic distance) introduced physical hazards (5V echo pulse risking ESP32 pin destruction), pin constraints (GPI-only GPIO34 lacking internal pull-up), and envelope size budget constraints.
+- **Architectural Shift**:
+  - **Sensor Registry & Envelope Capacity**: Verified 7 registered sensors within the 8-sensor static capacity ($7 \le 8$). Verified worst-case extended telemetry envelope at 165 bytes, well within the 256-byte ceiling ($165 < 256$).
+  - **Electrical Safety & Settling Contracts**: Serialized CD4051 acquisition with $20\ \mu\text{s}$ settling time between X0 and X1. Accounted for external pull-up resistor R7 ($10\text{ k}\Omega$) on GPI GPIO34 for MOC7811. Enforced a default safety inhibitor (`s_live_hw_enabled = false`) for HC-SR04 that keeps pins unconfigured in high-impedance reset state and clamped echo wait timeout to 8 ms (~1.37 m) to guarantee cyclic executive callback budget compliance ($\le 10\text{ ms}$).
+  - **Vertical Stack Pipeline**: Added `nexus_envelope_format_telemetry_ext` in firmware, extended Ground Station `EnvelopeParser` and `PointMapper` with backwards-compatible optional fields, updated `DISPLAY ANALOG` (`0x1044`) and `DIAGNOSTICS SENSORS` (`0x1802`), and grounded AI tool documentation.
+  - **Verification**: 44/44 C host tests passed (100%), 217/217 Python tests passed (100%), and clean ESP-IDF v6.0.1 compilation (`nexus.bin`, 0xe2650 B).
+
+---
+
+### Phase 11: Final Qualification & Production Release (Milestone 10)
+- **Problem**: Finalizing the project requires empirical qualification across the complete vertical cyber-physical stack, establishing reproducible test baselines, and clearly gating production release tagging on empirical physical hardware measurements rather than host simulations.
+- **Architectural Shift**:
+  - **Complete Automated Test Baseline**: 44/44 C host unit tests passing (100%), 236/236 Ground Station PyTest tests passing (100%), 19/19 soak analyzer unit tests passing (100%), and clean ESP-IDF compilation (`nexus.bin`, 927,392 B, 12% free headroom).
+  - **Target Firmware Deployment & Live Telemetry**: Successfully flashed `firmware/build/nexus.bin` to the physical ESP32 on `/dev/ttyUSB0` at 115200 baud. Verified boot banner identity `version=1a9bfcc-dirty` (Oct 20 2026 19:53:30) and confirmed 7 registered sensors (`LDR=OK, CD4051=OK, DHT11=OK, MOC=OK, ULTRA=OK`). Verified live serial ingestion (`docs/validation/m10_live_serial_ingestion.log`) capturing 13 envelopes and persisting real `x1_raw` (2029 at boot) and `slot_state` (0) into InfluxDB with 0 failures and 0 drops. Updated Grafana dashboard to Version 2 with Row 103 and 3 extended sensor panels (Hall X1, MOC7811 slot state, HC-SR04 distance), verified live via container API (15 active panels).
+  - **Executive Timing Contracts**: Disambiguated per-job timing contracts: sensor acquisition callbacks execute in $< 1\text{ ms}$ ($\ll 10\text{ ms}$ budget), `metrics` executes in $33.8\text{ ms}$ ($\le 50\text{ ms}$ budget due to UART string formatting), and asynchronous DHT11 worker runs outside cyclic executive callbacks, resulting in exactly zero deadline misses (`dline_misses = 0`).
+  - **Electrical Safety & Release Gating**: Confirmed active HC-SR04 5V pulse protection inhibitor (`s_live_hw_enabled = false`, pins unconfigured). Gated formal `v1.0.0` production release tagging on operator physical multimeter verification, MOC7811 optical beam-break, and Hall X1 magnet deflection.
+
+---
+
 ## 3. Cross-Cutting Design Principles
 
 The technical consistency of the NEXUS codebase is governed by eight core architectural principles:
@@ -196,20 +237,20 @@ Expanding embedded sensor suites requires strict physical verification of signal
 
 ## 4. Architectural Summary Across Milestones
 
-| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 | Milestone 5 | Milestone 6 | Milestone 7 | Milestone 8 | Milestone 9 |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated |
-| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
-| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots |
-| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots |
-| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) | 8 sensors (Integrated) | 8 sensors (Integrated) | 8 sensors (Integrated) | 8 sensors (Integrated) | 7 active sensors (LDR, DHT T/H, Gas X0, Hall X1, MOC7811, HC-SR04) |
-| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) | Python dual adapter (Serial + MQTT) | Dual-link: Serial + Authenticated Wi-Fi/MQTT | Dual-link + Bounded query engine & deduplication | Dual-link + Bidirectional Command Router & RX callback | Dual-link + Extended telemetry serialization (`x1`, `slot`, `dist`) |
-| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) | Protocol v1 JSON (Host parsed, float-checked) | Protocol v1 JSON (Host parsed & validated) | Protocol v1 JSON + Typed domain models | Protocol v1 JSON (`cmd` & `resp` schemas) | Protocol v1 JSON (165B worst-case, within 256B ceiling) |
-| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + Response Auto-Enqueue | 16 slots (MCU) + Extended telemetry |
-| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` | Host `DeviceTracker` sliding sequence window | 32-entry composite + Host `DeviceTracker` | Reboot-safe 5s window + `(dev, seq, epoch)` | 32-entry composite + Idempotency cooldown suppression | 32-entry composite preserved |
-| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (ASan/UBSan clean) | 99/99 passed (100% across 10 modules) | 15/15 C tests (ASan/UBSan) + 99 Python + 19 soak + 9 ACL | 210/210 passed (27 analysis, 32 monitoring, 30 AI/WebUI, 108 host, 19 soak) | 38/38 C host tests (100%) + 215/215 PyTest (100%) | 44/44 C host tests (100%) + 217/217 PyTest (100%) |
-| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS) | Live serial ingestion over `/dev/ttyUSB0` | Cold boot, Wi-Fi DHCP, Auth MQTT (21 pkts), Live Serial | Live ESP32 Wi-Fi/MQTT (32 pkts), InfluxDB, Grafana, Open WebUI Round-Trip | Software-verified (Clean ESP-IDF build, 0xe1ca0 B; physical input gap documented) | Software-verified (Clean ESP-IDF build, 0xe2650 B; 5V echo hazard inhibited) |
-| **Incident Storage** | None | None | None | None | None | None | None | None | SQLite WAL mode (`incidents.db`) with atomic transitions | SQLite WAL mode (`incidents.db`) preserved | SQLite WAL mode (`incidents.db`) preserved |
-| **AI / Intelligence** | None | None | None | None | None | None | None | None | 9 Read-only tools, Mistral 7B (Ollama), Open WebUI, Rule Router | Read-only AI boundary preserved; independent application launcher | M9 sensor grounding (`x1_raw_adc`, `slot_state`, `dist_cm`) |
-| **Command Engine** | None | None | None | None | None | None | None | None | None | Canonical 52-command matrix, 16-bit IDs, safe URL launcher | Updated DISPLAY ANALOG (0x1044) & DIAGNOSTICS SENSORS (0x1802) |
+| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 | Milestone 5 | Milestone 6 | Milestone 7 | Milestone 8 | Milestone 9 | Milestone 10 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated |
+| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
+| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots |
+| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots |
+| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) | 8 sensors (Integrated) | 8 sensors (Integrated) | 8 sensors (Integrated) | 8 sensors (Integrated) | 7 active sensors (LDR, DHT T/H, Gas X0, Hall X1, MOC7811, HC-SR04) | 7 active sensors fully qualified ($7 \le 8$) |
+| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) | Python dual adapter (Serial + MQTT) | Dual-link: Serial + Authenticated Wi-Fi/MQTT | Dual-link + Bounded query engine & deduplication | Dual-link + Bidirectional Command Router & RX callback | Dual-link + Extended telemetry serialization (`x1`, `slot`, `dist`) | Dual-link + Extended telemetry + InfluxDB & Grafana v2 dashboard |
+| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) | Protocol v1 JSON (Host parsed, float-checked) | Protocol v1 JSON (Host parsed & validated) | Protocol v1 JSON + Typed domain models | Protocol v1 JSON (`cmd` & `resp` schemas) | Protocol v1 JSON (165B worst-case, within 256B ceiling) | Protocol v1 JSON verified end-to-end (165B $\le 256$B) |
+| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + Response Auto-Enqueue | 16 slots (MCU) + Extended telemetry | 16 slots (MCU) + Extended telemetry |
+| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` | Host `DeviceTracker` sliding sequence window | 32-entry composite + Host `DeviceTracker` | Reboot-safe 5s window + `(dev, seq, epoch)` | 32-entry composite + Idempotency cooldown suppression | 32-entry composite preserved | 32-entry composite preserved |
+| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (ASan/UBSan clean) | 99/99 passed (100% across 10 modules) | 15/15 C tests (ASan/UBSan) + 99 Python + 19 soak + 9 ACL | 210/210 passed (27 analysis, 32 monitoring, 30 AI/WebUI, 108 host, 19 soak) | 38/38 C host tests (100%) + 215/215 PyTest (100%) | 44/44 C host tests (100%) + 217/217 PyTest (100%) | 44/44 C host tests (100%) + 236/236 PyTest (100%) + 19/19 soak tests (100%) |
+| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS) | Live serial ingestion over `/dev/ttyUSB0` | Cold boot, Wi-Fi DHCP, Auth MQTT (21 pkts), Live Serial | Live ESP32 Wi-Fi/MQTT (32 pkts), InfluxDB, Grafana, Open WebUI Round-Trip | Software-verified (Clean ESP-IDF build, 0xe1ca0 B; physical input gap documented) | Software-verified (Clean ESP-IDF build, 0xe2650 B; 5V echo hazard inhibited) | Software & target verified: Flashed M9/M10 (Oct 20 2026), 7 sensors registered; real serial ingestion (13 pkts, 0 drops, x1=2029, slot=0); release gated on physical excitation & multimeter check |
+| **Incident Storage** | None | None | None | None | None | None | None | None | SQLite WAL mode (`incidents.db`) with atomic transitions | SQLite WAL mode (`incidents.db`) preserved | SQLite WAL mode (`incidents.db`) preserved | SQLite WAL mode (`incidents.db`) preserved |
+| **AI / Intelligence** | None | None | None | None | None | None | None | None | 9 Read-only tools, Mistral 7B (Ollama), Open WebUI, Rule Router | Read-only AI boundary preserved; independent application launcher | M9 sensor grounding (`x1_raw_adc`, `slot_state`, `dist_cm`) | AI groundings & 9 tools verified operational |
+| **Command Engine** | None | None | None | None | None | None | None | None | None | Canonical 52-command matrix, 16-bit IDs, safe URL launcher | Updated DISPLAY ANALOG (0x1044) & DIAGNOSTICS SENSORS (0x1802) | Fully unified command engine & dispatcher |
 

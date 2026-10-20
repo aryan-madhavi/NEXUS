@@ -14,7 +14,7 @@
       }
     ]
   },
-  "description": "NEXUS Telemetry & Device Health Dashboard — Ambient conditions, sensor diagnostics, and executive performance metrics.",
+  "description": "NEXUS Telemetry & Device Health Dashboard \u2014 Ambient conditions, sensor diagnostics, and executive performance metrics.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -49,7 +49,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Temperature (°C)",
+            "axisLabel": "Temperature (\u00b0C)",
             "axisPlacement": "auto",
             "fillOpacity": 15,
             "gradientMode": "opacity",
@@ -101,7 +101,12 @@
       "id": 1,
       "options": {
         "legend": {
-          "calcs": ["mean", "lastNotNull", "max", "min"],
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -193,7 +198,12 @@
       "id": 2,
       "options": {
         "legend": {
-          "calcs": ["mean", "lastNotNull", "max", "min"],
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -273,7 +283,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -330,7 +342,9 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
@@ -366,7 +380,7 @@
         "type": "influxdb",
         "uid": "nexus_influxdb_flux"
       },
-      "description": "Raw 12-bit ADC value from Light-Dependent Resistor (0–4095).",
+      "description": "Raw 12-bit ADC value from Light-Dependent Resistor (0\u20134095).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -422,7 +436,12 @@
       "id": 5,
       "options": {
         "legend": {
-          "calcs": ["mean", "lastNotNull", "max", "min"],
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -450,7 +469,7 @@
         "type": "influxdb",
         "uid": "nexus_influxdb_flux"
       },
-      "description": "Raw 12-bit ADC value from analog diagnostic input channel X0 (0–4095).",
+      "description": "Raw 12-bit ADC value from analog diagnostic input channel X0 (0\u20134095).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -506,7 +525,12 @@
       "id": 6,
       "options": {
         "legend": {
-          "calcs": ["mean", "lastNotNull", "max", "min"],
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -608,7 +632,11 @@
       "id": 7,
       "options": {
         "legend": {
-          "calcs": ["mean", "lastNotNull", "min"],
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "min"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -690,7 +718,11 @@
       "id": 8,
       "options": {
         "legend": {
-          "calcs": ["mean", "lastNotNull", "max"],
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -712,11 +744,299 @@
       ],
       "title": "Executive Loop Ticks",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 103,
+      "title": "Extended Sensor Suite (M9 / M10 Qualification)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "nexus_influxdb_flux"
+      },
+      "description": "Raw 12-bit ADC value from Hall-effect sensor IC2 on multiplexer channel X1 (0\u20134095, quiescent baseline ~2048 counts).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "X1 Raw ADC Counts",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "max": 4095,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1800
+              },
+              {
+                "color": "orange",
+                "value": 2300
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 28
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "nexus_influxdb_flux"
+          },
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"x1_raw\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"x1_raw\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Hall Effect IC2 (CD4051 X1 Raw ADC)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "nexus_influxdb_flux"
+      },
+      "description": "MOC7811 optical slot sensor digital beam status on GPIO34 (0 = Clear / Unblocked, 1 = Interrupted / Blocked).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "CLEAR (Beam Intact)"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "BLOCKED (Beam Interrupted)"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 28
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "nexus_influxdb_flux"
+          },
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"slot_state\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^$/)\n  |> last()",
+          "refId": "A"
+        }
+      ],
+      "title": "MOC7811 Optical Slot Beam State",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "nexus_influxdb_flux"
+      },
+      "description": "HC-SR04 ultrasonic time-of-flight distance in cm on TRIG GPIO25 / ECHO GPIO26 (2\u2013400 cm). Suppressed while voltage inhibitor is active.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Distance (cm)",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "max": 400,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 15
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "lengthcm"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 28
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "nexus_influxdb_flux"
+          },
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"dist_cm\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"dist_cm\")",
+          "refId": "A"
+        }
+      ],
+      "title": "HC-SR04 Ultrasonic Distance",
+      "type": "timeseries"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["nexus", "telemetry", "esp32"],
+  "tags": [
+    "nexus",
+    "telemetry",
+    "esp32"
+  ],
   "templating": {
     "list": [
       {
@@ -761,6 +1081,6 @@
   "timezone": "browser",
   "title": "NEXUS Telemetry & Device Health",
   "uid": "nexus_telemetry_health",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

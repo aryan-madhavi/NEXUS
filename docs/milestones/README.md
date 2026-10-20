@@ -19,6 +19,8 @@ This directory contains the sequential, fully documented technical records of ev
 | **M6** | [**MILESTONE_6.md**](MILESTONE_6.md) | Secure Wi-Fi/MQTT Transport, Broker Authentication & End-to-End Acceptance | **COMPLETE — PHYSICALLY VERIFIED** | 10/10 Physical Hardware Acceptance Criteria PASS (Multi-Transport + Live InfluxDB & Grafana) | `8f53877`, `ee20f8d`, `7243003`, [`milestone6_3_validation_report.md`](../validation/milestone6_3_validation_report.md), [`m6_3_mqtt_telemetry.log`](../validation/m6_3_mqtt_telemetry.log) |
 | **M7** | [**MILESTONE_7.md**](MILESTONE_7.md) | Telemetry Analysis, Deterministic Incident Monitoring & Conversational AI | **ACCEPTED & COMMITTED** | 210/210 Regression Tests PASS + Open WebUI Tool Round-Trip + Physical Hardware InfluxDB Persistence | `3cc3426`, `42f4c08`, `54c1319`, `bc7cf0d`, `a445a3f`, [`M7_FINAL_CLOSURE.md`](../validation/M7_FINAL_CLOSURE.md) |
 | **M8** | [**MILESTONE_8.md**](MILESTONE_8.md) | Canonical Command Engine, Bidirectional Protocol & Laptop Launcher | **IMPLEMENTED & VERIFIED** | 38/38 C Host Tests (100%) + 215/215 PyTest (100%) + ESP-IDF Build PASS | [`nexus_command_registry.c`](../../firmware/main/command/nexus_command_registry.c), [`application_launcher.py`](../../ground_station/command_router/application_launcher.py), [`MILESTONE_8.md`](MILESTONE_8.md) |
+| **M9** | [**MILESTONE_9.md**](MILESTONE_9.md) | Extended Sensor Integration (CD4051 X1, MOC7811, HC-SR04) & Observability | **ACCEPTED & COMMITTED** | 44/44 C Host Tests (100%) + 217/217 PyTest (100%) + ESP-IDF Build PASS | `1a9bfcc`, `firmware/build/nexus.bin` (`0xe26a0` B), [`MILESTONE_9.md`](MILESTONE_9.md) |
+| **M10** | [**MILESTONE_10.md**](MILESTONE_10.md) | Final Qualification & Production Release | **QUALIFIED (RELEASE GATED)** | Target Flashed (N=7 Sensors) + 44/44 C Tests + 236/236 PyTest + Real InfluxDB Storage | [`MILESTONE_10.md`](MILESTONE_10.md), [`m10_live_serial_ingestion.log`](../validation/m10_live_serial_ingestion.log), `grafana/dashboards/nexus_telemetry.json` |
 | **Hist** | [**PROJECT_HISTORY.md**](PROJECT_HISTORY.md) | Chronological Project History & Architectural Evolution | **CURRENT** | Synthesis of all repository milestones | [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) |
 
 ---
@@ -121,6 +123,17 @@ This directory contains the sequential, fully documented technical records of ev
   - Full pipeline telemetry: Protocol v1 extended telemetry serialization (`x1`, `slot`, `dist`), backward-compatible Ground Station parser, InfluxDB point mapping, and AI tool grounding (`x1_raw_adc`, `slot_state`, `dist_cm`).
 - **Outcome**: **44/44 C Host Tests PASS** (100%), **217/217 Python Tests PASS** (100%), clean ESP-IDF compilation (`nexus.bin`, 0xe2650 bytes). Milestone 9 is **IMPLEMENTED & VERIFIED**.
 
+### [Milestone 10 — Final Qualification & Production Release](MILESTONE_10.md)
+- **Objective**: Conduct end-to-end cyber-physical qualification of the complete vertical stack, distinguish verified software contracts from pending physical hardware actions, and establish production release criteria.
+- **Key Deliverables**:
+  - Full automated regression test suites: 44/44 C host tests (100%), 236/236 PyTest tests (100%), clean ESP-IDF v6.0.1 compilation (`firmware/build/nexus.bin`, 927,392 B).
+  - Target firmware deployment: Successfully flashed `nexus.bin` to physical ESP32 on `/dev/ttyUSB0` at 115200 baud; verified boot banner identity `version=1a9bfcc-dirty`, `build=Oct 20 2026 19:53:30`, and exactly 7 sensors registered (`LDR=OK, CD4051=OK, DHT11=OK, MOC=OK, ULTRA=OK`).
+  - Executive timing contract verification: Verified independent per-job budgets. Sensor callbacks execute in $< 1\text{ ms}$ ($\ll 10\text{ ms}$ budget); diagnostic `metrics` callback executes in $33.8\text{ ms}$ ($\le 50\text{ ms}$ budget); DHT11 worker runs asynchronously on FreeRTOS Priority 2 task. Zero deadline misses recorded (`dline_misses = 0`).
+  - Live pipeline qualification: 15s live serial ingestion over `/dev/ttyUSB0` (`docs/validation/m10_live_serial_ingestion.log`) capturing 13 envelopes (7 `hb`, 2 `status`, 4 `telem`) and writing 13 points to InfluxDB with 0 failures; verified real persistence of `x1_raw` (2029 at boot) and `slot_state` (0).
+  - Grafana dashboard v2: Extended `grafana/dashboards/nexus_telemetry.json` with Row 103 and Panels 9 (Hall X1 ADC), 10 (MOC7811 Slot State), and 11 (HC-SR04 Distance); verified 15 panels live via container API.
+  - Electrical & physical gates: HC-SR04 Echo 5V pulse protection verified via active driver inhibitor (`s_live_hw_enabled = false`); live hardware acquisition held pending multimeter check. Physical excitation of MOC7811 (beam interruption) and Hall X1 (magnet deflection) marked pending.
+- **Outcome**: **QUALIFIED (GATED ON PHYSICAL EXCITATION & MULTIMETER VERIFICATION)**. Software stack is 100% production-ready; production release tagging (`v1.0.0`) is held pending operator physical excitation and multimeter verification.
+
 ---
 
 ## 3. Subsystem Dependency & Progression Graph
@@ -138,9 +151,10 @@ flowchart TD
     M7[Milestone 7: Telemetry Analysis, Monitoring & Conversational AI]
     M8[Milestone 8: Canonical Command Engine & Laptop Launcher]
     M9[Milestone 9: Extended Sensor Integration & Observability]
+    M10[Milestone 10: Final Qualification & Production Release]
     
-    subgraph Future Roadmap
-        M10[Milestone 10: Final Qualification & Production Release]
+    subgraph Production Release Sign-Off
+        REL[Production Release Tag: v1.0.0]
     end
 
     M1 -->|Verified ESP-IDF & Serial Link| M2
@@ -154,13 +168,15 @@ flowchart TD
     M7 -->|Observability & Anomaly Bedrock| M8
     M8 -->|Command Engine & Dispatcher| M9
     M9 -->|Sensor Suite & Full Pipeline| M10
+    M10 -.->|Pending Hardware Flashing & Multimeter Check| REL
 
     classDef done fill:#2e7d32,stroke:#1b5e20,color:#ffffff;
     classDef pending fill:#f57f17,stroke:#bc5100,color:#ffffff;
     classDef future fill:#37474f,stroke:#263238,color:#ffffff;
     
     class M1,M2,M3,M3_1,M4,M4_Gate,M5,M6,M7,M8,M9 done;
-    class M10 future;
+    class M10 pending;
+    class REL future;
 ```
 
 ---
@@ -182,11 +198,9 @@ To prevent ambiguity regarding what has been physically demonstrated versus simu
 
 ---
 
-## 5. Future Development Roadmap
+## 5. Production Release Status & Post-Release Maintenance
 
-Following the completion and software sign-off of Milestone 9:
-- **Milestone 10 — Final Qualification & Production Release (NEXT)**:
-  - **Hardware Qualification**: Validate 3.3V voltage divider on HC-SR04 Echo (GPIO26), external pull-up and polarity on MOC7811 (GPIO34), and live ADC baseline on CD4051 X1 Hall-effect sensor.
-  - **Endurance Soak Campaign**: Execute an extended dual-transport soak test validating zero-drop telemetry ingestion over physical Serial and authenticated MQTT.
-  - **Dashboard & Alert Finalization**: Finalize Grafana dashboards and deterministic alerting thresholds incorporating all 7 active sensor signals.
-  - **Release Baseline**: Final production tagging, reproducible build verification, and project release sign-off.
+Following Milestone 10 qualification:
+- **Software Stack**: Fully qualified and frozen. All 10 acceptance criteria software specifications are satisfied.
+- **Physical Release Gating**: Formal production tagging (`v1.0.0`) is held pending operator completion of the physical checklist in [`MILESTONE_10.md`](MILESTONE_10.md) (firmware flash, HC-SR04 multimeter level verification, MOC7811 beam-break, Hall X1 magnet deflection).
+- **Post-Release Operations**: Long-term continuous telemetry monitoring via InfluxDB, Grafana, and Ground Station incident detection rules.

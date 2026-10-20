@@ -75,6 +75,9 @@ class NexusLogAnalyzer:
         self.max_consecutive_invalids = 0
         self.dht_temps = []
         self.dht_hums = []
+        self.x1_samples = []
+        self.slot_samples = []
+        self.dist_samples = []
 
         # Serial snapshot state
         self.reset_reasons = []
@@ -235,6 +238,28 @@ class NexusLogAnalyzer:
 
                     if self.consecutive_invalids > self.max_consecutive_invalids:
                         self.max_consecutive_invalids = self.consecutive_invalids
+
+                    # Optional extended telemetry fields (M9/M10)
+                    if "x1" in pkt:
+                        x1 = pkt["x1"]
+                        if type(x1) not in (int, float) or type(x1) is bool:
+                            self.telem_invalid_types += 1
+                        else:
+                            self.x1_samples.append(x1)
+
+                    if "slot" in pkt:
+                        slot = pkt["slot"]
+                        if type(slot) not in (int, float) or type(slot) is bool:
+                            self.telem_invalid_types += 1
+                        else:
+                            self.slot_samples.append(slot)
+
+                    if "dist" in pkt:
+                        dist = pkt["dist"]
+                        if type(dist) not in (int, float) or type(dist) is bool:
+                            self.telem_invalid_types += 1
+                        else:
+                            self.dist_samples.append(dist)
 
     def parse_serial_stream(self):
         """Parse raw serial console records for executive, connection, and driver snapshots."""
@@ -788,6 +813,9 @@ class NexusLogAnalyzer:
                 "invalid_field_types": self.telem_invalid_types,
                 "fabricated_readings": self.fabricated_readings,
                 "max_consecutive_invalids": self.max_consecutive_invalids,
+                "x1_samples_count": len(self.x1_samples),
+                "slot_samples_count": len(self.slot_samples),
+                "dist_samples_count": len(self.dist_samples),
             },
             "serial_metrics": {
                 "exec_snapshots_count": len(self.exec_snapshots),
@@ -840,6 +868,18 @@ class NexusLogAnalyzer:
         if self.dht_hums:
             lines.append(
                 f"- **Humidity Dynamic Range**: {min(self.dht_hums)}% to {max(self.dht_hums)}% RH"
+            )
+        if self.x1_samples:
+            lines.append(
+                f"- **Hall Effect X1 (IC2) Dynamic Range**: {min(self.x1_samples)} to {max(self.x1_samples)} counts (N={len(self.x1_samples)})"
+            )
+        if self.slot_samples:
+            lines.append(
+                f"- **MOC7811 Slot Sensor Samples**: N={len(self.slot_samples)} (Blocked={sum(1 for s in self.slot_samples if s != 0)}, Clear={sum(1 for s in self.slot_samples if s == 0)})"
+            )
+        if self.dist_samples:
+            lines.append(
+                f"- **HC-SR04 Distance Dynamic Range**: {min(self.dist_samples)} cm to {max(self.dist_samples)} cm (N={len(self.dist_samples)})"
             )
 
         if len(self.driver_snapshots) >= 2:
