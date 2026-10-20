@@ -14,13 +14,11 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from ground_station import load_env_file
 from ground_station.connection_manager.envelope_parser import (
-    MessageType,
     ParsedEnvelope,
-    TelemetryPayload,
 )
 from ground_station.connection_manager.mqtt_adapter import (
     MqttConfig,
@@ -34,6 +32,7 @@ from ground_station.connection_manager.serial_adapter import (
     SerialConfig,
     SerialTransportAdapter,
 )
+from ground_station.monitoring.service import MonitoringConfig, MonitoringService
 from ground_station.persistence.influxdb_writer import (
     InfluxDBConfig,
     InfluxDBWriter,
@@ -62,6 +61,7 @@ class DualTransportIngestionSession:
         mqtt_topic: Optional[str] = None,
         duration_sec: int = 30,
         log_path: Optional[str] = None,
+        enable_monitoring: bool = False,
     ) -> None:
         self.serial_port = serial_port
         self.serial_baud = serial_baud
@@ -70,6 +70,10 @@ class DualTransportIngestionSession:
         self.mqtt_topic = mqtt_topic
         self.duration_sec = duration_sec
         self.log_path = log_path
+        self.enable_monitoring = enable_monitoring or (
+            os.environ.get("NEXUS_ENABLE_MONITORING", "").lower() in ("1", "true", "yes")
+        )
+        self.monitoring_service: Optional[MonitoringService] = None
         self._running = False
         self._log_file = None
 
@@ -124,7 +128,7 @@ class DualTransportIngestionSession:
         if self.log_path:
             os.makedirs(os.path.dirname(os.path.abspath(self.log_path)), exist_ok=True)
             self._log_file = open(self.log_path, "w", encoding="utf-8")
-            self._log_file.write(f"# NEXUS Simultaneous Multi-Transport Capture\n")
+            self._log_file.write("# NEXUS Simultaneous Multi-Transport Capture\n")
             self._log_file.write(f"# Started: {get_utc_timestamp()}\n\n")
             self._log_file.flush()
 
@@ -139,6 +143,15 @@ class DualTransportIngestionSession:
         self.manager.register_transport(self.mqtt_adapter)
         self.manager.register_consumer(self._on_envelope_ingested)
         self.manager.register_consumer(self.influx_writer.write_envelope)
+
+        if self.enable_monitoring:
+            # Dual-transport has two adapters, but exactly ONE unified monitoring worker
+            monitoring_cfg = MonitoringConfig.from_env(merged_env)
+            self.monitoring_service = MonitoringService(config=monitoring_cfg)
+            print(
+                f"  Monitoring Service: ENABLED (db={monitoring_cfg.db_path}, "
+                f"interval={monitoring_cfg.normal_interval_sec}s)"
+            )
 
         return True
 
@@ -181,6 +194,9 @@ class DualTransportIngestionSession:
         if self.influx_writer:
             self.influx_writer.start()
         self.manager.start()
+        if self.monitoring_service:
+            print(f"[{get_utc_timestamp()}] Starting unified background deterministic monitoring service...")
+            self.monitoring_service.start()
 
         start_time = time.monotonic()
         last_progress_time = start_time
@@ -219,6 +235,9 @@ class DualTransportIngestionSession:
         """Clean shutdown of adapters and persistent queues."""
         print(f"[{get_utc_timestamp()}] Stopping pipeline components...")
         self._running = False
+        if self.monitoring_service:
+            print(f"[{get_utc_timestamp()}] Stopping background monitoring service...")
+            self.monitoring_service.stop()
         if self.manager:
             self.manager.stop()
         if self.influx_writer:
@@ -273,6 +292,15 @@ class DualTransportIngestionSession:
         print(f"  Successful Writes:       {w_stats.successful_writes}")
         print(f"  Write Failures:          {w_stats.write_failures}")
         print(f"  Queue Drops:             {w_stats.queue_drops}")
+
+        if self.monitoring_service:
+            mon_status = self.monitoring_service.get_status()
+            ds_str = mon_status.data_source.status.value if mon_status.data_source else "UNKNOWN"
+            print("\nDeterministic Monitoring Status:")
+            print(f"  Running:                 {mon_status.is_running}")
+            print(f"  Cycle Count:             {mon_status.evaluation_count}")
+            print(f"  Active Incidents:        {mon_status.active_incident_count}")
+            print(f"  Source State:            {ds_str}")
         print("=" * 70)
 
     def verify_database(self) -> None:
@@ -321,6 +349,12 @@ def main() -> int:
     parser.add_argument("--mqtt-port", type=int, default=None, help="MQTT broker port")
     parser.add_argument("--duration", type=int, default=30, help="Run duration in seconds")
     parser.add_argument("--log-file", type=str, default=None, help="Capture log path")
+    parser.add_argument(
+        "--enable-monitoring",
+        action="store_true",
+        default=False,
+        help="Enable background deterministic incident monitoring service",
+    )
     args = parser.parse_args()
 
     session = DualTransportIngestionSession(
@@ -330,6 +364,7 @@ def main() -> int:
         mqtt_port=args.mqtt_port,
         duration_sec=args.duration,
         log_path=args.log_file,
+        enable_monitoring=args.enable_monitoring,
     )
 
     if not session.setup():

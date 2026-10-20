@@ -20,11 +20,10 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
 from ground_station import load_env_file
 from ground_station.connection_manager.envelope_parser import (
-    MessageType,
     ParsedEnvelope,
     TelemetryPayload,
 )
@@ -36,11 +35,11 @@ from ground_station.connection_manager.serial_adapter import (
     SerialConfig,
     SerialTransportAdapter,
 )
+from ground_station.monitoring.service import MonitoringConfig, MonitoringService
 from ground_station.persistence.influxdb_writer import (
     InfluxDBConfig,
     InfluxDBWriter,
 )
-from ground_station.persistence.point_mapper import PointMapper
 
 try:
     from influxdb_client import InfluxDBClient
@@ -62,11 +61,16 @@ class SerialIngestionSession:
         baud_rate: int = 115200,
         duration_sec: int = 30,
         log_path: Optional[str] = None,
+        enable_monitoring: bool = False,
     ) -> None:
         self.port = port
         self.baud_rate = baud_rate
         self.duration_sec = duration_sec
         self.log_path = log_path
+        self.enable_monitoring = enable_monitoring or (
+            os.environ.get("NEXUS_ENABLE_MONITORING", "").lower() in ("1", "true", "yes")
+        )
+        self.monitoring_service: Optional[MonitoringService] = None
         self._running = False
         self._log_file = None
 
@@ -110,7 +114,7 @@ class SerialIngestionSession:
         if self.log_path:
             os.makedirs(os.path.dirname(os.path.abspath(self.log_path)), exist_ok=True)
             self._log_file = open(self.log_path, "w", encoding="utf-8")
-            self._log_file.write(f"# NEXUS Phase 6.1 Serial Ingestion Capture\n")
+            self._log_file.write("# NEXUS Phase 6.1 Serial Ingestion Capture\n")
             self._log_file.write(f"# Started: {get_utc_timestamp()}\n")
             self._log_file.write(f"# Port: {self.port}, Baud: {self.baud_rate}\n\n")
             self._log_file.flush()
@@ -137,6 +141,14 @@ class SerialIngestionSession:
         self.manager.register_transport(self.serial_adapter)
         self.manager.register_consumer(self._on_envelope_ingested)
         self.manager.register_consumer(self.influx_writer.write_envelope)
+
+        if self.enable_monitoring:
+            monitoring_cfg = MonitoringConfig.from_env(merged_env)
+            self.monitoring_service = MonitoringService(config=monitoring_cfg)
+            print(
+                f"  Monitoring Service: ENABLED (db={monitoring_cfg.db_path}, "
+                f"interval={monitoring_cfg.normal_interval_sec}s)"
+            )
 
         return True
 
@@ -182,6 +194,9 @@ class SerialIngestionSession:
         print(f"[{get_utc_timestamp()}] Starting InfluxDB persistence writer and host manager...")
         self.influx_writer.start()
         self.manager.start()
+        if self.monitoring_service:
+            print(f"[{get_utc_timestamp()}] Starting background deterministic monitoring service...")
+            self.monitoring_service.start()
 
         start_time = time.monotonic()
         last_report_time = start_time
@@ -202,6 +217,9 @@ class SerialIngestionSession:
                 time.sleep(0.2)
 
         finally:
+            if self.monitoring_service:
+                print(f"[{get_utc_timestamp()}] Stopping background monitoring service...")
+                self.monitoring_service.stop()
             print(f"\n[{get_utc_timestamp()}] Stopping serial transport adapter and host manager...")
             self.manager.stop()
             print(f"[{get_utc_timestamp()}] Stopping InfluxDB writer and flushing remaining batches...")
@@ -261,6 +279,14 @@ class SerialIngestionSession:
         if self.latest_temp is not None:
             print(f"Latest Valid Readings:     Temp={self.latest_temp:.1f}°C, Hum={self.latest_hum:.1f}%, LDR={self.latest_ldr}, Gas_X0={self.latest_x0}")
         print(f"InfluxDB Writes:           success={w_stats.successful_writes}, failures={w_stats.write_failures}, queue_drops={w_stats.queue_drops}")
+        if self.monitoring_service:
+            mon_status = self.monitoring_service.get_status()
+            ds_str = mon_status.data_source.status.value if mon_status.data_source else "UNKNOWN"
+            print("\nDeterministic Monitoring Status:")
+            print(f"  Running:                 {mon_status.is_running}")
+            print(f"  Cycle Count:             {mon_status.evaluation_count}")
+            print(f"  Active Incidents:        {mon_status.active_incident_count}")
+            print(f"  Source State:            {ds_str}")
         print("=" * 70)
 
     def _verify_influxdb_storage(self) -> None:
@@ -330,6 +356,12 @@ def main() -> int:
         default="docs/validation/phase6_1_serial_ingestion.log",
         help="Path to capture serial raw log",
     )
+    parser.add_argument(
+        "--enable-monitoring",
+        action="store_true",
+        default=False,
+        help="Enable background deterministic incident monitoring service",
+    )
     args = parser.parse_args()
 
     session = SerialIngestionSession(
@@ -337,6 +369,7 @@ def main() -> int:
         baud_rate=args.baud,
         duration_sec=args.duration,
         log_path=args.log_file,
+        enable_monitoring=args.enable_monitoring,
     )
     if not session.setup():
         return 1

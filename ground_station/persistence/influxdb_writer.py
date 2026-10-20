@@ -78,8 +78,9 @@ class InfluxDBConfig:
         - INFLUXDB_USE_SINGLE_MEASUREMENT: Use single measurement if 'true'
         """
         import os
+        from ground_station import load_env_file
 
-        source = os.environ if env is None else env
+        source = {**load_env_file(), **os.environ} if env is None else env
         token = source.get("INFLUXDB_TOKEN") or source.get("INFLUXDB_INIT_ADMIN_TOKEN")
         return cls(
             url=source.get("INFLUXDB_URL", "http://localhost:8086"),
