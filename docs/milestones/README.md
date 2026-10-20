@@ -17,6 +17,7 @@ This directory contains the sequential, fully documented technical records of ev
 | **M4** | [**MILESTONE_4.md**](MILESTONE_4.md) | Unified Connection Manager, Protocol v1 Envelopes & Audit | **ACCEPTED & SIGNED OFF** | Physical 30-min Hardware Soak (12/12 Criteria PASS) | `build/nexus.bin` (`4f9850bc...`), [`soak_qualification_run2_report.md`](../validation/soak_qualification_run2_report.md), [`milestone4_validation_report.md`](../validation/milestone4_validation_report.md) |
 | **M5** | [**MILESTONE_5.md**](MILESTONE_5.md) | Python Ground Station, InfluxDB Persistence & Grafana Observability | **ACCEPTED & COMMITTED** | 99 Unit Tests (100% pass) + Physical Serial Log | `59b2864`, `7243003`, [`run_serial_ingestion.py`](../../ground_station/run_serial_ingestion.py), [`phase6_1_serial_ingestion.log`](../validation/phase6_1_serial_ingestion.log) |
 | **M6** | [**MILESTONE_6.md**](MILESTONE_6.md) | Secure Wi-Fi/MQTT Transport, Broker Authentication & End-to-End Acceptance | **COMPLETE — PHYSICALLY VERIFIED** | 10/10 Physical Hardware Acceptance Criteria PASS (Multi-Transport + Live InfluxDB & Grafana) | `8f53877`, `ee20f8d`, `7243003`, [`milestone6_3_validation_report.md`](../validation/milestone6_3_validation_report.md), [`m6_3_mqtt_telemetry.log`](../validation/m6_3_mqtt_telemetry.log) |
+| **M7** | [**MILESTONE_7.md**](MILESTONE_7.md) | Telemetry Analysis, Deterministic Incident Monitoring & Conversational AI | **ACCEPTED & COMMITTED** | 210/210 Regression Tests PASS + Open WebUI Tool Round-Trip + Physical Hardware InfluxDB Persistence | `3cc3426`, `42f4c08`, `54c1319`, `bc7cf0d`, `a445a3f`, [`M7_FINAL_CLOSURE.md`](../validation/M7_FINAL_CLOSURE.md) |
 | **Hist** | [**PROJECT_HISTORY.md**](PROJECT_HISTORY.md) | Chronological Project History & Architectural Evolution | **CURRENT** | Synthesis of all repository milestones | [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) |
 
 ---
@@ -90,6 +91,16 @@ This directory contains the sequential, fully documented technical records of ev
   - **Phase 6.3**: Permanent broker LAN binding (`10.12.252.18:1883`), Ground Station MQTT ingestion runner (`run_mqtt_ingestion.py`), simultaneous multi-transport dual-stream runner (`run_dual_transport_ingestion.py`), direct InfluxDB storage verification (>445 MQTT points), Grafana query verification, and broker fault-tolerance / reconnection testing.
 - **Outcome**: **10/10 Physical Acceptance Criteria PASS**. Milestone 6 is **COMPLETE — PHYSICALLY VERIFIED**. Proceeding to Milestone 7.
 
+### [Milestone 7 — Telemetry Analysis, Deterministic Incident Monitoring & Conversational AI](MILESTONE_7.md)
+- **Objective**: Establish an air-gapped, local-first intelligence and automated monitoring layer on top of the physical telemetry pipeline, featuring typed analysis abstractions, durable SQLite incident storage, deterministic anomaly rules, and natural-language telemetry querying via local SLMs (Mistral 7B) and Open WebUI.
+- **Key Deliverables**:
+  - **Phase 7.1 (Analysis Foundation)**: Implemented typed models (`TelemetryPoint`, `DeviceSeries`, `DataQualityReport`, `SignalStatistics`), data quality metrics (null rate, sequence continuity, cadence jitter, validity flags), bounded InfluxDB Flux queries (1,000-point hard cap + server-side aggregations), and reboot-safe dual-transport deduplication in [`ground_station/analysis/`](../../ground_station/analysis/).
+  - **Phase 7.2 (Deterministic Monitoring & Store)**: Built a thread-safe SQLite incident store (`incidents.db`) in WAL mode with atomic status transitions. Implemented pluggable rules (`FreshnessRule`, `SensorAnomalyRule`, `ExecutiveHealthRule`), outage-aware state handling, and an adaptive evaluation scheduler in [`ground_station/monitoring/`](../../ground_station/monitoring/).
+  - **Phase 7.3 (Read-Only AI Core)**: Designed a strictly read-only security boundary, 9 bounded operational telemetry tools, local model integration via Ollama (`mistral:7b`), deterministic Rule Router fallback for offline operation, and an interactive operator CLI in [`ground_station/ai/`](../../ground_station/ai/).
+  - **Phase 7.4 (Operational Integration)**: Created native Open WebUI tool adapter (`open_webui_tools.py`), automated tool registration script (`register_open_webui.py`), standalone monitoring runner (`runner.py`), and `--enable-monitoring` lifecycle hooks across all ingestion scripts with single-worker guarantees in dual-transport mode.
+  - **Phase 7.5 (Live Validation & Hardware Acceptance)**: Verified complete physical pipeline (ESP32 $\to$ Mosquitto $\to$ Ground Station $\to$ InfluxDB $\to$ Grafana) with 32 consecutive frames, InfluxDB persistence, Grafana panel query, and live Open WebUI tool-call round-trip with Mistral 7B. Disambiguated uncalibrated raw ADC semantics (`x0_raw_adc`).
+- **Outcome**: **210/210 Regression Tests PASS** in 8.12s; Ruff lint clean. Milestone 7 is **FULLY ACCEPTED & COMMITTED**.
+
 ---
 
 ## 3. Subsystem Dependency & Progression Graph
@@ -104,10 +115,11 @@ flowchart TD
     M4_Gate{30-Min Soak Qualification: 12/12 PASS}
     M5[Milestone 5: Ground Station & InfluxDB / Grafana]
     M6[Milestone 6: Authenticated Dual-Transport Hardware Validation]
+    M7[Milestone 7: Telemetry Analysis, Monitoring & Conversational AI]
     
     subgraph Active & Future Roadmap
+        M8[Milestone 8: Multi-Sensor Multiplexing & Extended Hardware Qualification]
         M6_3[Milestone 6.3: Bidirectional Command Protocol & Registry]
-        M7[Milestone 7: AI / LLM Tool Service Integration]
     end
 
     M1 -->|Verified ESP-IDF & Serial Link| M2
@@ -117,16 +129,17 @@ flowchart TD
     M4 -->|Spinlock Fix & Hardware EN Pulse| M4_Gate
     M4_Gate -->|Validated Dual-Link Telemetry| M5
     M5 -->|Live Telemetry Ingestion Pipeline| M6
-    M6 -->|Authenticated Transport Backbone| M6_3
-    M6_3 --> M7
+    M6 -->|Telemetry & InfluxDB Persistence| M7
+    M7 -->|Observability & Anomaly Bedrock| M8
+    M6 -.->|Future Actuation Path| M6_3
 
     classDef done fill:#2e7d32,stroke:#1b5e20,color:#ffffff;
     classDef pending fill:#f57f17,stroke:#bc5100,color:#ffffff;
     classDef future fill:#37474f,stroke:#263238,color:#ffffff;
     
-    class M1,M2,M3,M3_1,M4,M4_Gate,M5,M6 done;
-    class M6_3 pending;
-    class M7 future;
+    class M1,M2,M3,M3_1,M4,M4_Gate,M5,M6,M7 done;
+    class M8 pending;
+    class M6_3 future;
 ```
 
 ---
@@ -150,13 +163,14 @@ To prevent ambiguity regarding what has been physically demonstrated versus simu
 
 ## 5. Future Development Roadmap
 
-Following the completion and validation of Milestone 6:
-- **Milestone 6.3 — Bidirectional Command Protocol & Command Registry (NEXT)**:
+Following the completion and validation of Milestone 7:
+- **Milestone 8 — Multi-Sensor Multiplexing & Extended Hardware Qualification (NEXT)**:
+  - Activate remaining multiplexer channels on the CD4051 (Channels X1 through X7) to support expanded gas and analog sensor suites.
+  - Formulate multi-channel ADC sampling schedules within the cyclic executive without violating execution budgets.
+  - Expand InfluxDB schemas and Grafana dashboards for multi-channel gas analysis.
+  - Extend deterministic monitoring rules to correlate multi-sensor thermal and chemical gradients.
+- **Milestone 6.3 — Bidirectional Command Protocol & Command Registry**:
   - Formal command dispatch table on ESP32 (`nexus_command_registry`).
   - Inbound command reception on `nexus/<device_id>/cmd` via `nexus_wifi_mqtt_rx_handler_t`.
   - Secure command parsing and execution inside the cyclic executive (`LED`, `BUZ`, `RATE`, `RESET`, `CALIB`).
   - Host-to-device command acknowledgments and execution responses (`resp` envelopes).
-- **Milestone 7 — AI / LLM Telemetry Service**:
-  - Python tool service bridging local InfluxDB telemetry to Open WebUI.
-  - Secure AI queries isolated from device actuation topics via broker ACLs.
-  - Evaluation of local SLM inference (Cactus-Compute / Needle) on compatible models.

@@ -43,6 +43,10 @@ timeline
                     : Host loopback broker isolation & least-privilege topic ACLs (RC 135)
                     : ESP32 credential integration, missing-credential guard, local secret isolation
                     : 15/15 host tests, physical flash, and live dual-transport telemetry
+    2026-10-19 - 20 : Milestone 7 : Telemetry Analysis Foundation & Quality Metrics
+                    : Deterministic SQLite Incident Store (WAL Mode) & Rule Engine
+                    : Read-Only Conversational AI (Mistral 7B) & Open WebUI Tools
+                    : Live Physical Pipeline & Full Regression Passed (210/210)
 ```
 
 ---
@@ -138,9 +142,20 @@ timeline
 
 ---
 
+### Phase 8: Telemetry Analysis, Deterministic Incident Monitoring & Conversational AI (Milestone 7)
+- **Problem**: As physical telemetry streams continuously into InfluxDB and Grafana, human operators cannot remain perpetually vigilant for transient sensor failures, packet cadence jitter, or slow memory leaks. Furthermore, direct ad-hoc querying of InfluxDB lacks statistical bounds, and introducing conversational LLMs without strict sandboxing risks hallucinations or accidental actuation commands.
+- **Architectural Shift**:
+  - **Telemetry Analysis Foundation**: Implemented typed domain abstractions in `ground_station/analysis/` (`TelemetryPoint`, `DeviceSeries`, `DataQualityReport`, `SignalStatistics`). Added automated data-quality assessment (null rates, cadence jitter, sequence continuity, `dht_valid` bitmasks) and statistical calculations (mean, median, standard deviation, linear regression drift slope). Enforced a 1,000-point hard limit on raw InfluxDB Flux history while executing server-side aggregate pushdowns for unbounded long-term statistics. Implemented reboot-safe dual-transport deduplication across a 5-second window.
+  - **Deterministic Incident Monitoring & SQLite WAL Store**: Created `ground_station/monitoring/` featuring a thread-safe, durable SQLite database (`ground_station/data/incidents.db`) in Write-Ahead Logging (`WAL`) mode with atomic status transitions (`ACTIVE`, `RESOLVED`, `ACKNOWLEDGED`, `SUPPRESSED`). Implemented pluggable rules: `FreshnessRule` (cadence degradation and blackouts), `SensorAnomalyRule` (DHT validity and threshold violations), and `ExecutiveHealthRule` (heap depletion $< 10\text{ KB}$ and loop stalls). Added outage-aware state handling distinguishing network disconnections from sensor faults.
+  - **Air-Gapped Read-Only Conversational AI**: Built a secure conversational agent and tool registry in `ground_station/ai/` exposing nine strictly read-only operational query tools. Validated all arguments against formal schemas, barring arbitrary code execution, SQL/Flux injection, and MQTT command publishing. Integrated local model inference with `mistral:7b` via Ollama (`http://127.0.0.1:11434`) and implemented a deterministic Rule Router fallback for offline operation.
+  - **Operational Ecosystem**: Formatted the nine operational tools into native Open WebUI adapters (`open_webui_tools.py`) and automated their registration against Open WebUI at `http://127.0.0.1:8080`. Integrated `--enable-monitoring` lifecycle hooks across all ingestion scripts with a single unified worker guarantee in dual-transport mode.
+  - **Grounded Verification**: Clarified uncalibrated raw ADC semantics (`x0_raw_adc`, 0–4095) in prompts and schemas. Verified live physical telemetry (32 frames, `seq: 2032..2063`, temp 31.0°C, hum 72.0%, LDR 11, Gas 1006) persisted into InfluxDB, visualized on Grafana, and successfully queried through live Open WebUI tool calls with Mistral 7B. Full regression suite passed (210/210 passed in 8.12s); Ruff lint clean.
+
+---
+
 ## 3. Cross-Cutting Design Principles
 
-The technical consistency of the NEXUS codebase is governed by seven core architectural principles:
+The technical consistency of the NEXUS codebase is governed by eight core architectural principles:
 
 ### 1. Zero Runtime Dynamic Allocation
 All queues, descriptors, sample buffers, envelopes, and state contexts are allocated as static globals or pre-sized arrays at startup. Once `app_main` initializes, zero calls to `malloc`, `calloc`, or `pvPortMalloc` occur in the steady-state runtime loop, eliminating heap fragmentation and out-of-memory crashes.
@@ -168,21 +183,26 @@ Host-side telemetry storage must protect time-series indexing performance. High-
 ### 7. Least-Privilege Network & Credential Boundaries
 Services published by the container stack remain bound strictly to loopback (`127.0.0.1`), requiring explicit, controlled host-level bridges for physical LAN device ingress. Topic-level ACLs enforce strict privilege boundaries (edge devices cannot subscribe to other nodes' telemetry or broadcast arbitrary messages). If authentication credentials are absent, network transports fail closed (`NEXUS_CONN_STATE_FAILED`) rather than falling back to unauthenticated operation, and secrets are segregated into local, git-ignored configuration overlays.
 
+### 8. Air-Gapped AI Read-Only Boundary & Grounded Diagnostics
+Conversational AI models must never possess autonomous actuation authority over physical embedded hardware. All tool interfaces exposed to LLMs are strictly read-only, sandboxed, and parameter-validated against formal JSON schemas. Grounded system prompts explicitly disambiguate raw hardware counts (e.g. uncalibrated ADC counts) from calibrated engineering units to prevent hallucination. When local LLM runtimes are offline or unreachable, deterministic rule routers parse operator intents to provide immediate, un-hallucinated diagnostic responses.
+
 ---
 
 ## 4. Architectural Summary Across Milestones
 
-| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 | Milestone 5 | Milestone 6 |
-|---|---|---|---|---|---|---|---|---|
-| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated |
-| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
-| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots |
-| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots |
-| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) | 8 sensors (Integrated) | 8 sensors (Integrated) |
-| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) | Python dual adapter (Serial + MQTT) | Dual-link: Serial + Authenticated Wi-Fi/MQTT |
-| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) | Protocol v1 JSON (Host parsed, float-checked) | Protocol v1 JSON (Host parsed & validated) |
-| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) |
-| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` | Host `DeviceTracker` sliding sequence window | 32-entry composite + Host `DeviceTracker` |
-| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (ASan/UBSan clean) | 99/99 passed (100% across 10 modules) | 15/15 C tests (ASan/UBSan) + 99 Python + 19 soak + 9 ACL |
-| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS) | Live serial ingestion over `/dev/ttyUSB0` | Cold boot, Wi-Fi DHCP, Auth MQTT (21 pkts), Live Serial |
+| Subsystem / Metric | Milestone 1 | Milestone 2 | Milestone 3 | Milestone 3.1 | Milestone 4 | Milestone 4.1 | Milestone 5 | Milestone 6 | Milestone 7 |
+|---|---|---|---|---|---|---|---|---|---|
+| **Executive Core** | None (delay loop) | Cyclic 100 ms tick | Cyclic 100 ms tick | Decoupled timing contract | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated | Preserved & isolated |
+| **Job Capacity** | N/A | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors | 16 descriptors |
+| **Ready Queue** | N/A | 16 slots (Priority/FIFO) | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots | 16 slots |
+| **Event Queue** | N/A | 32 slots (Drop-on-full) | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots | 32 slots |
+| **Sensor Registry** | None | None | 8 sensors (ADC1, LDR, Mux, DHT) | 8 sensors | 8 sensors (Integrated) | 8 sensors (Validity & safe API) | 8 sensors (Integrated) | 8 sensors (Integrated) | 8 sensors (Integrated) |
+| **Transport Layer** | Raw serial boot log | Raw serial heartbeat | Raw serial metrics | Microsecond telemetry | Unified CM (Serial + Wi-Fi/MQTT) | Dual-link (Inbound MQTT + Diagnostics) | Python dual adapter (Serial + MQTT) | Dual-link: Serial + Authenticated Wi-Fi/MQTT | Dual-link + Bounded query engine & deduplication |
+| **Message Framing** | Unstructured text | Unstructured text | Tabular serial text | Tabular serial text | Protocol v1 JSON (`\n` framed) | Protocol v1 JSON (`dht_valid` schema) | Protocol v1 JSON (Host parsed, float-checked) | Protocol v1 JSON (Host parsed & validated) | Protocol v1 JSON + Typed domain models |
+| **Transmit Queue** | None | None | None | None | 16 slots (Static ring) | 16 slots (Static ring) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) | 16 slots (MCU) + 1000 items (Host manager) |
+| **Ingress Dedup** | None | None | None | None | 32-entry composite `(source, dev, seq)` | 32-entry composite `(source, dev, seq)` | Host `DeviceTracker` sliding sequence window | 32-entry composite + Host `DeviceTracker` | Reboot-safe 5s window + `(dev, seq, epoch)` |
+| **Host Unit Tests** | None | 5/5 passed | 7/7 passed | 9/9 passed | 10/10 passed | 30/30 total (ASan/UBSan clean) | 99/99 passed (100% across 10 modules) | 15/15 C tests (ASan/UBSan) + 99 Python + 19 soak + 9 ACL | 210/210 passed (27 analysis, 32 monitoring, 30 AI/WebUI, 108 host, 19 soak) |
+| **Physical Validation** | Bootloader & UART0 | 65s steady-state | 65s sensor acquisition | 70s cold boot baseline | 95s serial baseline (162 env, 0 drops) | 30-min qualification soak (12/12 PASS) | Live serial ingestion over `/dev/ttyUSB0` | Cold boot, Wi-Fi DHCP, Auth MQTT (21 pkts), Live Serial | Live ESP32 Wi-Fi/MQTT (32 pkts), InfluxDB, Grafana, Open WebUI Round-Trip |
+| **Incident Storage** | None | None | None | None | None | None | None | None | SQLite WAL mode (`incidents.db`) with atomic transitions |
+| **AI / Intelligence** | None | None | None | None | None | None | None | None | 9 Read-only tools, Mistral 7B (Ollama), Open WebUI, Rule Router |
 
