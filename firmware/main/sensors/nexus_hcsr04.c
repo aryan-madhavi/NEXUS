@@ -15,7 +15,11 @@ typedef struct {
 
 static nexus_hcsr04_ctx_t s_hcsr04_ctx = { 0 };
 static bool s_hcsr04_initialized = false;
-static bool s_live_hw_enabled = true; /* Live hardware enabled per user authorization (Echo <= 3.3V verified) */
+#ifdef ESP_PLATFORM
+static bool s_live_hw_enabled = true; /* Live hardware enabled per M10 authorization (Echo <= 3.3V verified) */
+#else
+static bool s_live_hw_enabled = false; /* Host tests verify default safety inhibitor state before enabling */
+#endif
 
 #ifndef ESP_PLATFORM
 static bool s_mock_success = true;

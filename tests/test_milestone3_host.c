@@ -14,6 +14,8 @@
 #include "sensors/nexus_adc_ldr.h"
 #include "sensors/nexus_cd4051.h"
 #include "sensors/nexus_dht11.h"
+#include "sensors/nexus_moc7811.h"
+#include "sensors/nexus_hcsr04.h"
 #include "sensors/nexus_sensors.h"
 
 static void test_sensor_registry_lifecycle(void)
@@ -252,21 +254,27 @@ static void test_sensors_executive_integration(void)
     assert(nexus_sensors_init(&reg));
     assert(nexus_sensors_register_jobs(&reg, &exec));
 
-    /* Verify jobs are registered in job table */
-    assert(exec.job_table.active_count == 3);
+    /* Verify jobs are registered in job table (LDR, CD4051, DHT11, MOC7811, HC-SR04) */
+    assert(exec.job_table.active_count == 5);
 
     /* Inject mock sensor data */
     nexus_adc_set_mock_raw(NEXUS_ADC_CHANNEL_LDR, 3000, true);
     nexus_adc_set_mock_raw(NEXUS_ADC_CHANNEL_CD4051, 1500, true);
     uint8_t valid_bytes[5] = { 55, 0, 24, 0, 79 };
     nexus_dht11_set_mock_packet(valid_bytes, false);
+    nexus_moc7811_set_mock_state(0, true);
+    nexus_hcsr04_set_live_enabled(true);
+    nexus_hcsr04_set_mock_pulse(580U, true);
 
     /* Advance executive tick to t = 2000 ms (all jobs should trigger) */
     nexus_executive_tick(&exec, 2000000LL);
 
-    assert(exec.stats.jobs_dispatched == 3);
-    assert(exec.stats.jobs_completed == 3);
+    assert(exec.stats.jobs_dispatched == 5);
+    assert(exec.stats.jobs_completed == 5);
     assert(exec.stats.jobs_failed == 0);
+
+    /* Restore default host safety inhibitor state */
+    nexus_hcsr04_set_live_enabled(false);
 
     /* Verify sensor registry has samples */
     nexus_sensor_descriptor_t *ldr_d = nexus_sensor_get(&reg, NEXUS_SENSOR_ID_LDR);

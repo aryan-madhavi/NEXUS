@@ -452,7 +452,16 @@ class TestAgentOrchestration(unittest.TestCase):
             uptime_ms=12000,
             host_time=now,
             transports=["fake_serial"],
-            fields={"temp": 0.0, "hum": 0.0, "dht_valid": False, "ldr_raw": 1800, "x0_raw": 2900},
+            fields={
+                "temp": 0.0,
+                "hum": 0.0,
+                "dht_valid": False,
+                "ldr_raw": 1800,
+                "x0_raw": 2900,
+                "x1_raw": 300,
+                "slot_state": 1,
+                "dist_cm": 48.0,
+            },
         )
         self.mock_query.get_raw_envelopes.return_value = [env]
 
@@ -465,6 +474,9 @@ class TestAgentOrchestration(unittest.TestCase):
         self.assertIn("Humidity: INVALID", resp.content)
         self.assertIn("LDR Raw ADC: 1800", resp.content)
         self.assertIn("X0 Raw ADC: 2900", resp.content)
+        self.assertIn("X1 Raw ADC: 300", resp.content)
+        self.assertIn("MOC7811 Optical Slot State: 1", resp.content)
+        self.assertIn("HC-SR04 Ultrasonic Distance: 48.0 cm", resp.content)
         self.assertNotIn("ppm", resp.content)
 
 

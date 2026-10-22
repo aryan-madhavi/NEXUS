@@ -586,6 +586,37 @@ class TestQueryBoundsAndFreshness(unittest.TestCase):
         self.assertTrue(report_stale.has_telemetry)
         self.assertTrue(report_stale.is_stale)
 
+    def test_raw_envelopes_and_history_sort_desc_before_limit_and_return_newest_tail(self) -> None:
+        """Verify Flux queries sort descending before limit() so long windows return newest records."""
+        t0 = datetime(2026, 10, 18, 12, 0, 0, tzinfo=timezone.utc)
+        records = [
+            FakeFluxRecord(
+                values={
+                    "_time": t0 + timedelta(days=i),
+                    "dev": "nexus_esp32",
+                    "transport": "serial",
+                    "seq": i,
+                    "uptime_ms": i * 2000,
+                    "temp": 20.0 + i,
+                },
+                time=t0 + timedelta(days=i),
+                value=20.0 + i,
+                field="temp",
+                measurement="nexus_telem",
+            )
+            for i in range(4)
+        ]
+        self.mock_query_api.query.return_value = [FakeFluxTable(records)]
+
+        envelopes = self.service.get_raw_envelopes("nexus_esp32", msg_type="telem", start="-30d", limit=2)
+        flux_called = self.mock_query_api.query.call_args_list[-1][0][0]
+        self.assertLess(
+            flux_called.index('sort(columns: ["_time"], desc: true)'),
+            flux_called.index("limit(n:"),
+        )
+        self.assertEqual(len(envelopes), 2)
+        self.assertEqual([e.seq for e in envelopes], [2, 3])
+
 
 if __name__ == "__main__":
     unittest.main()

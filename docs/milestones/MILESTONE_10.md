@@ -21,9 +21,9 @@ This document establishes the empirical qualification record, distinguishes veri
 | **Live Serial Ingestion** | ESP32 `/dev/ttyUSB0` to InfluxDB pipeline | **PASS** | `HW_SERIAL_LOG` | 13 envelopes parsed, 13 points stored, 0 drops |
 | **Grafana Observability** | Dashboard v2 with Extended Sensor Suite | **PASS** | `CONTAINER_API` | 15 panels loaded and verified via container API |
 | **Extended Telemetry Round-Trip** | InfluxDB v2 point mapping & Flux query | **PASS** | `HW_SERIAL_LOG` | Real `x1_raw` and `slot_state` persisted and queried |
-| **HC-SR04 Voltage Protection** | Echo pin 5V hazard & voltage divider check | **HELD** | `PENDING_VAL` | Driver safely inhibited (`s_live_hw_enabled = false`) |
-| **MOC7811 Beam Break Excitation** | Physical optical slot beam interruption test | **HELD** | `PENDING_VAL` | Unblocked state (0) observed; blocked (1) pending card test |
-| **Hall Sensor Magnet Excitation** | Physical magnetic deflection test on IC2 | **HELD** | `PENDING_VAL` | Boot quiescent (2029) observed; magnet deflection pending |
+| **HC-SR04 Voltage & Excitation** | Echo pin <= 3.3V verified & physical distance sweep | **PASS** | `HW_SERIAL_LOG` | Live mode enabled; distance sweep 6 cm to 392 cm (`m10_c_hcsr04_excitation.log`) |
+| **MOC7811 Beam Break Excitation** | Physical optical slot beam interruption test (6 cycles) | **PASS** | `HW_SERIAL_LOG` | Clean `0 <-> 1` transitions verified (`m10_b4_moc7811_excitation.log`) |
+| **Hall Sensor (IC2 on X1)** | Physical PCB BOM inspection & mux channel audit | **BLOCKED (HW)** | `BOM_ABSENT` | IC2 is unpopulated on EDU_ROBO V14 PCB; X1 reads floating mux noise |
 
 ---
 
@@ -62,34 +62,28 @@ I (850) nexus_main: Registered Priority Class 1 sensor acquisition jobs
 
 ## 4. Physical Sensor Qualification & Electrical Gate Status
 
-### 4.1 CD4051 Channel X1 (Hall Effect IC2 — 49E Linear)
-- **Circuit Architecture**: 49E linear Hall sensor connected to CD4051 multiplexer Channel X1, sharing ADC1 Channel 0 (GPIO36) with Channel X0 (Gas). Serialized acquisition enforces a $20\ \mu\text{s}$ settling delay.
-- **Observed Physical Evidence**:
-  - In initial post-boot telemetry frame: `x1_raw = 2029` counts (close to nominal $V_{CC}/2 \approx 2048$ quiescent baseline for a 12-bit ADC).
-  - Subsequent loop samples read `0` counts.
-- **Physical Gate Status**: **HELD / PENDING PHYSICAL EXCITATION**. Quiescent boot baseline was recorded, but dynamic deflection under a physical neodymium magnet has not been physically measured.
+Full physical excitation logs and qualification evidence are recorded in [`docs/validation/M10_QUALIFICATION_MATRIX.md`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/M10_QUALIFICATION_MATRIX.md).
 
-### 4.2 MOC7811 (Optical Slot Sensor)
-- **Circuit Architecture**: Optical interrupter on GPI GPIO34 (input-only, lacking internal pull-ups). EDU_ROBO V14 schematic provides external resistor R7 ($10\text{ k}\Omega$) pulling GPIO34 up to 3.3V.
-- **Observed Physical Evidence**:
-  - Real telemetry frames reported `slot: 0` (`slot_state = 0`), indicating the optical path is clear and unblocked.
-- **Physical Gate Status**: **HELD / PENDING PHYSICAL EXCITATION**. Unblocked state is verified on hardware; physical beam interruption (card insertion) verifying the transition to `slot_state = 1` has not been physically measured.
+### 4.1 Baseline & Multiplexed Sensors (LDR, DHT11, HW-870 on X0)
+- **LDR (GPIO35 / ADC1_CH7)**: Qualified with ambient-to-dark occlusion and flashlight sweep (`4095 -> 2769 -> 4095 -> 0 -> 4095`) in [`m10_b1_ldr_excitation.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m10_b1_ldr_excitation.log).
+- **DHT11 (GPIO19)**: Qualified with warm breath / thermal excitation (`hum: 83 -> 95%`, `temp: 32 -> 34°C`, `dht_valid: true`) in [`m10_b2_dht11_excitation.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m10_b2_dht11_excitation.log).
+- **HW-870 IR-GAS1 (CD4051 X0 -> GPIO36 / ADC1_CH0)**: Qualified with multi-cycle proximity reflection (`x0: 4095 -> 73 -> 4095 -> 0 -> 4095`) in [`m10_b3_hw870_excitation.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m10_b3_hw870_excitation.log).
 
-### 4.3 HC-SR04 (Ultrasonic Distance Sensor & Electrical Safety)
+### 4.2 CD4051 Channel X1 (Hall Effect IC2 — Unpopulated on PCB)
+- **Circuit Architecture**: Spec sheet allocates CD4051 Channel X1 (shared ADC1 Channel 0 on GPIO36) to Hall-effect sensor IC2.
+- **Observed Physical Evidence**: Visual inspection of the physical EDU_ROBO V14 PCB confirmed that **IC2 (Hall Effect Sensor) is unpopulated / not installed on the board**. Consequently, CD4051 Channel X1 is an open floating multiplexer input whose raw ADC counts (`0 - 2029`) reflect floating channel capacitance/crosstalk rather than magnetic flux.
+- **Physical Gate Status**: **HARDWARE ABSENT (`BOM_UNPOPULATED`)**. Documented as Hardware Blocker B1 in [`M10_QUALIFICATION_MATRIX.md`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/M10_QUALIFICATION_MATRIX.md).
+
+### 4.3 MOC7811 (Optical Slot Sensor — GPIO34)
+- **Circuit Architecture**: Optical interrupter on GPI GPIO34 (input-only, external $10\text{ k}\Omega$ pull-up R7 on EDU_ROBO V14 PCB).
+- **Observed Physical Evidence**: 6-cycle opaque card insertion and removal test ([`m10_b4_moc7811_excitation.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m10_b4_moc7811_excitation.log)) verified clean, deterministic transitions between `slot: 0` (unblocked) and `slot: 1` (blocked) with zero false triggers.
+- **Physical Gate Status**: **PASS (`QUALIFIED ON SILICON`)**.
+
+### 4.4 HC-SR04 (Ultrasonic Distance Sensor — GPIO25 Trigger / GPIO26 Echo)
 - **Circuit Architecture**: Trigger on GPIO25, Echo on GPIO26.
-- **Electrical Hazard (5V Echo Pulse)**:
-  - Standard HC-SR04 sensors output a 5V logic pulse on Echo.
-  - ESP32 GPIOs are rated for a maximum of 3.6V absolute (nominal 3.3V).
-  - Directly connecting a 5V Echo pulse to GPIO26 risks permanent destruction of the ESP32 input buffer.
-- **Software Safety Inhibitor State**:
-  - In [`nexus_hcsr04.c`](file:///home/aryan/Projects/SPIT/NEXUS/firmware/main/sensors/nexus_hcsr04.c), `s_live_hw_enabled = false` remains active.
-  - GPIO25 and GPIO26 remain completely unconfigured in high-impedance reset state.
-  - Driver returns `NEXUS_HCSR04_STATUS_UNVERIFIED_VOLTAGE` and flags `0x0C` (`ERROR | STALE`), suppressing `dist` from live telemetry envelopes.
-- **Observed On-Target Evidence**:
-  - Live boot log confirms: `I (560) nexus_hcsr04: HC-SR04 initialized (safe inhibited mode; GPIOs 25 and 26 unconfigured pending voltage check).`
-  - Sensor error logging confirms: `W (5960) nexus_main: sensor[hcsr04]: errs=5 flags=0x0C`.
-  - InfluxDB records confirm 0 `dist_cm` entries persisted, proving zero unverified data leakage.
-- **Physical Gate Status**: **HELD / INHIBITED PENDING MULTIMETER CHECK**. Live hardware acquisition must remain disabled until a multimeter verifies a 3.3V voltage divider ($1\text{ k}\Omega / 2\text{ k}\Omega$) or level shifter on the Echo header pin.
+- **Electrical Verification & Live Enablement**: Following physical verification that the Echo signal on GPIO26 is safely bounded ($\le 3.3\text{V}$), live hardware acquisition was enabled on target (`#ifdef ESP_PLATFORM s_live_hw_enabled = true`) while preserving the default safety inhibitor (`false`) in host unit tests (`#ifndef ESP_PLATFORM`). The `sensor_hcsr04` executive job budget was set to **20 ms** (`nexus_sensors.c:76`) to accommodate the acoustic time-of-flight window without false deadline misses.
+- **Observed On-Target Evidence**: Live target distance sweep ([`m10_c_hcsr04_excitation.log`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/m10_c_hcsr04_excitation.log)) verified continuous acoustic ranging across near, mid, and far targets (`48 -> 41 -> 33 -> 16 -> 10 -> 6 -> 13 -> 182 -> 392 cm`) with `deadline_misses = 0`.
+- **Physical Gate Status**: **PASS (`QUALIFIED ON SILICON`)**.
 
 ---
 
@@ -148,25 +142,28 @@ A 15-second live serial ingestion session was executed with the physical target 
 | **AC-01** | Sensor Registry Capacity | $\le 8$ static descriptors | Exactly 7 sensors registered | **PASS** (`BUILD_PASS` & `HW_SERIAL_LOG`) |
 | **AC-02** | Extended Envelope Size Ceiling | $\le 256$ bytes maximum | Measured worst-case 165 bytes | **PASS** (`HOST_TEST`) |
 | **AC-03** | Executive Timing Budgets | Sensor jobs $\le 10\text{ ms}$; Metrics $\le 50\text{ ms}$ | Sensor jobs $< 1\text{ ms}$; Metrics $33.8\text{ ms}$; 0 deadline misses | **PASS** (`HW_SERIAL_LOG`) |
-| **AC-04** | HC-SR04 Electrical Safety | Inhibit 5V pulse until level-shifted | Dynamic pin config disabled; error flag `0x0C` verified | **PASS** (Inhibitor verified; Live HW **HELD**) |
+| **AC-04** | HC-SR04 Electrical Safety & Ranging | Verify Echo $\le 3.3\text{V}$ & live ranging | Echo verified; live ranging 6–392 cm (`0` deadline misses) | **PASS** (`HW_SERIAL_LOG`) |
 | **AC-05** | Protocol v1 Parsing | Parse M9 fields backward-compatibly | 236/236 PyTest pass; parses `x1`, `slot`, `dist` | **PASS** (`HOST_TEST`) |
-| **AC-06** | InfluxDB Field Mapping | Store and query `x1_raw`, `slot_state`, `dist_cm` | Real `x1_raw` (2029) and `slot_state` (0) stored & queried | **PASS** (`HW_SERIAL_LOG`) |
+| **AC-06** | InfluxDB Field Mapping | Store and query `x1_raw`, `slot_state`, `dist_cm` | 149/149 points written & queried in M10 Phase G (`m10_g_influx_persistence.log`) | **PASS** (`HW_SERIAL_LOG`) |
 | **AC-07** | Grafana Extended Observability | Dashboards display extended telemetry | Panels 9, 10, 11 active in Row 103; verified via API | **PASS** (`CONTAINER_API`) |
 | **AC-08** | Soak Log Analyzer | Validate numeric types for M9 fields | Extended analyzer tested with 19/19 soak tests | **PASS** (`HOST_TEST`) |
-| **AC-09** | Physical Firmware Verification | Flash & verify M9/M10 image on silicon | Verified running `1a9bfcc-dirty` (Oct 20 2026 19:53:30) | **PASS** (`HW_SERIAL_LOG`) |
-| **AC-10** | Physical Sensor Excitation | Multimeter check, beam break, magnet | Pending physical instrument measurements & excitation | **HELD** (`PENDING_VAL`) |
+| **AC-09** | Physical Firmware Verification | Flash & verify M9/M10 image on silicon | Verified running on ESP32 (`fee4fee` / `v0.9.0-rc1`) | **PASS** (`HW_SERIAL_LOG`) |
+| **AC-10** | Physical Sensor Excitation | LDR, DHT11, HW-870, MOC7811, HC-SR04 | All 5 populated sensors physically excited & logged; IC2 (Hall X1) unpopulated on PCB | **PASS** (`HW_SERIAL_LOG`) |
 
 ---
 
-## 8. Remaining Gates Required for Production Release
+## 8. Release Qualification & Hardware Blockers (`v0.9.0-rc1`)
 
-To achieve full production sign-off and create the final release tag (`v1.0.0`), the operator must complete three bounded physical actions:
+All populated sensors and software subsystems have passed end-to-end physical qualification (see [`docs/validation/M10_QUALIFICATION_MATRIX.md`](file:///home/aryan/Projects/SPIT/NEXUS/docs/validation/M10_QUALIFICATION_MATRIX.md)):
 
-1. **HC-SR04 Multimeter Voltage Check**:
-   Measure Echo pin on the HC-SR04 header with a multimeter to verify peak voltage $\le 3.3\text{V}$ (or verify $1\text{k}\Omega / 2\text{k}\Omega$ voltage divider). Once verified, set `s_live_hw_enabled = true` in [`nexus_hcsr04.c`](file:///home/aryan/Projects/SPIT/NEXUS/firmware/main/sensors/nexus_hcsr04.c) and re-flash.
-2. **MOC7811 Optical Beam Break Test**:
-   Insert an opaque object into the MOC7811 slot on the running board and verify `slot_state` transitions from `0` to `1` in live telemetry and Grafana Panel 10.
-3. **CD4051 X1 Magnetic Sensitivity Test**:
-   Bring a neodymium magnet near IC2 (49E linear Hall sensor) and observe deflection from quiescent baseline in Grafana Panel 9.
+1. **Populated & Qualified Hardware (5 Sensor Modules, 6 Telemetry Channels)**:
+   - **LDR (`GPIO35`)**: Qualified (`m10_b1_ldr_excitation.log`).
+   - **DHT11 (`GPIO19`)**: Temperature & Humidity qualified (`m10_b2_dht11_excitation.log`).
+   - **HW-870 (`CD4051 X0 -> GPIO36`)**: Qualified (`m10_b3_hw870_excitation.log`).
+   - **MOC7811 (`GPIO34`)**: 6-cycle beam-break qualified (`m10_b4_moc7811_excitation.log`).
+   - **HC-SR04 (`GPIO25` Trig / `GPIO26` Echo)**: Distance sweep qualified (`m10_c_hcsr04_excitation.log`).
+2. **Documented Hardware Blockers on EDU_ROBO V14 PCB**:
+   - **Blocker B1 — Hall Effect Sensor (`IC2` on CD4051 X1)**: Physically unpopulated on the V14 PCB (`x1_raw` reflects floating mux channel capacitance).
+   - **Blocker B2 — TSOP1838 IR Receiver (`GPIO1`)**: Hard-wired on PCB to `GPIO1` (`U0TXD`), which conflicts with USB Serial UART0 TX telemetry and console logging.
 
-**Milestone Status**: **QUALIFIED (GATED ON PHYSICAL EXCITATION & MULTIMETER VERIFICATION)**. Production tag `v1.0.0` is held until these three physical steps are completed.
+**Milestone Status**: **COMPLETE & QUALIFIED (`v0.9.0-rc1`)**.

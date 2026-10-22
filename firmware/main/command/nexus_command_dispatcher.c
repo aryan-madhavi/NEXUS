@@ -223,7 +223,8 @@ static bool execute_supported_command(nexus_command_dispatcher_t *disp,
             if (d_temp && d_hum) {
                 temp = d_temp->latest_processed;
                 hum = d_hum->latest_processed;
-                valid = (d_temp->sample_count > 0 && d_temp->error_count == 0);
+                valid = (d_temp->sample_count > 0) &&
+                        ((d_temp->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0);
             }
         }
         snprintf(extra, sizeof(extra), "\"temp\":%" PRId32 ",\"hum\":%" PRId32 ",\"valid\":%s",
@@ -239,7 +240,8 @@ static bool execute_supported_command(nexus_command_dispatcher_t *disp,
             nexus_sensor_descriptor_t *d_ldr = nexus_sensor_get(disp->sensors, NEXUS_SENSOR_ID_LDR);
             if (d_ldr) {
                 ldr_val = d_ldr->latest_raw;
-                fresh = (d_ldr->sample_count > 0 && d_ldr->error_count == 0);
+                fresh = (d_ldr->sample_count > 0) &&
+                        ((d_ldr->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0);
             }
         }
         snprintf(extra, sizeof(extra), "\"ldr_raw\":%" PRId32 ",\"valid\":%s",
@@ -257,12 +259,14 @@ static bool execute_supported_command(nexus_command_dispatcher_t *disp,
             nexus_sensor_descriptor_t *d_mux_x0 = nexus_sensor_get(disp->sensors, NEXUS_SENSOR_ID_MUX_GAS_X0);
             if (d_mux_x0) {
                 x0_val = d_mux_x0->latest_raw;
-                fresh_x0 = (d_mux_x0->sample_count > 0 && d_mux_x0->error_count == 0);
+                fresh_x0 = (d_mux_x0->sample_count > 0) &&
+                           ((d_mux_x0->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0);
             }
             nexus_sensor_descriptor_t *d_mux_x1 = nexus_sensor_get(disp->sensors, NEXUS_SENSOR_ID_HALL_X1);
             if (d_mux_x1) {
                 x1_val = d_mux_x1->latest_raw;
-                fresh_x1 = (d_mux_x1->sample_count > 0 && d_mux_x1->error_count == 0);
+                fresh_x1 = (d_mux_x1->sample_count > 0) &&
+                           ((d_mux_x1->sample_flags & NEXUS_SAMPLE_FLAG_ERROR) == 0);
             }
         }
         snprintf(extra, sizeof(extra), "\"mux_x0\":%" PRId32 ",\"valid\":%s,\"mux_x1\":%" PRId32 ",\"valid_x1\":%s",

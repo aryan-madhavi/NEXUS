@@ -80,7 +80,7 @@ class Tools:
         """Compute summary statistics (min, max, mean, count) for a signal over a bounded window without truncation.
 
         :param device_id: Device identifier (default: 'esp32_01').
-        :param signal: Permitted signal name ('temp', 'hum', 'ldr_raw', 'x0_raw', 'free_heap', 'exec_ticks').
+        :param signal: Permitted signal name ('temp', 'hum', 'ldr_raw', 'x0_raw', 'x1_raw', 'slot_state', 'dist_cm', 'free_heap', 'exec_ticks').
         :param window: Relative duration window (e.g. '-15m', '-1h', '-24h'). Default: '-15m'.
         :return: JSON formatted string containing statistical aggregates.
         """
@@ -100,7 +100,7 @@ class Tools:
         """Compute rate-of-change slope and directional trend (RISING, FALLING, STABLE) over a time window.
 
         :param device_id: Device identifier (default: 'esp32_01').
-        :param signal: Numeric signal name ('temp', 'hum', 'ldr_raw', 'x0_raw', 'free_heap').
+        :param signal: Numeric signal name ('temp', 'hum', 'ldr_raw', 'x0_raw', 'x1_raw', 'slot_state', 'dist_cm', 'free_heap').
         :param window: Relative duration window (e.g. '-15m', '-1h'). Default: '-15m'.
         :return: JSON formatted string containing trend direction, slope per minute, and delta.
         """

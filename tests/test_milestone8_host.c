@@ -166,6 +166,19 @@ static void test_display_and_diagnostics_handlers(void)
     TEST_ASSERT(ok, "DISPLAY ENVIRONMENT");
     TEST_ASSERT(strstr((char *)resp.buffer, "\"temp\":26") != NULL, "Temp 26");
     TEST_ASSERT(strstr((char *)resp.buffer, "\"hum\":55") != NULL, "Hum 55");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"valid\":true") != NULL, "Valid true");
+
+    /* Verify DISPLAY ENVIRONMENT reports valid:false during active error, and recovers to valid:true on subsequent sample */
+    nexus_sensor_record_error(&sensors, NEXUS_SENSOR_ID_DHT11_TEMP, false);
+    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_env, strlen(cmd_env), &resp);
+    TEST_ASSERT(ok, "DISPLAY ENVIRONMENT during error");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"valid\":false") != NULL, "Valid false on active error");
+
+    nexus_sensor_update_sample(&sensors, NEXUS_SENSOR_ID_DHT11_TEMP, 27, 27, 0, 2000);
+    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_env, strlen(cmd_env), &resp);
+    TEST_ASSERT(ok, "DISPLAY ENVIRONMENT after recovery");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"temp\":27") != NULL, "Temp 27");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"valid\":true") != NULL, "Valid true after recovery despite error_count > 0");
 
     /* DISPLAY LIGHT */
     const char *cmd_light = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":11,\"type\":\"cmd\",\"verb\":\"DISPLAY\",\"noun\":\"LIGHT\"}\n";
@@ -189,7 +202,8 @@ static void test_display_and_diagnostics_handlers(void)
     const char *cmd_diag_sens = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":14,\"type\":\"cmd\",\"verb\":\"DIAGNOSTICS\",\"noun\":\"SENSORS\"}\n";
     ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_diag_sens, strlen(cmd_diag_sens), &resp);
     TEST_ASSERT(ok, "DIAGNOSTICS SENSORS");
-    TEST_ASSERT(strstr((char *)resp.buffer, "\"reads\":4") != NULL, "Reads 4");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"reads\":5") != NULL, "Reads 5");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"errors\":1") != NULL, "Errors 1");
 
     printf("  [PASS] Display and diagnostics handlers verified\n");
 }

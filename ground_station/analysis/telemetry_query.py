@@ -369,8 +369,8 @@ class TelemetryQueryService:
           |> filter(fn: (r) => r["dev"] == "{valid_dev}")
           |> filter(fn: (r) => r["_field"] == "{field_name}")
           {transport_clause}
+          |> sort(columns: ["_time"], desc: true)
           |> limit(n: {valid_limit})
-          |> sort(columns: ["_time"], desc: false)
         '''
 
         tables, _ = self._execute_query(flux)
@@ -392,7 +392,7 @@ class TelemetryQueryService:
                 )
 
         records.sort(key=lambda r: r.host_time)
-        return records[:valid_limit]
+        return records[-valid_limit:]
 
     def get_raw_envelopes(
         self,
@@ -434,8 +434,8 @@ class TelemetryQueryService:
           |> filter(fn: (r) => r["dev"] == "{valid_dev}")
           {transport_clause}
           |> pivot(rowKey:["_time", "dev", "transport"], columnKey: ["_field"], valueColumn: "_value")
+          |> sort(columns: ["_time"], desc: true)
           |> limit(n: {valid_limit * 2 if deduplicate else valid_limit})
-          |> sort(columns: ["_time"], desc: false)
         '''
 
         tables, _ = self._execute_query(flux)
@@ -449,7 +449,7 @@ class TelemetryQueryService:
 
         if not deduplicate:
             result = []
-            for ev in raw_events[:valid_limit]:
+            for ev in raw_events[-valid_limit:]:
                 fields = {
                     k: v
                     for k, v in ev.items()
@@ -515,10 +515,7 @@ class TelemetryQueryService:
             recent_by_identity[identity_key] = new_obs
             deduped.append(new_obs)
 
-            if len(deduped) >= valid_limit:
-                break
-
-        return deduped[:valid_limit]
+        return deduped[-valid_limit:]
 
     def get_window_statistics(
         self,

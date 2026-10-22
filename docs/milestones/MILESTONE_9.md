@@ -52,17 +52,17 @@ Before modifying firmware or protocol serialization, three core engineering cons
 
 | Sensor / Module | Channel / Signal | ESP32 GPIO | Pin Type | Status / Safety Notes |
 |:---|:---:|:---:|:---:|:---|
-| **LDR** | Analog In | GPIO39 | ADC1 Ch3 (Input only) | Verified M3; active in Class 1 |
-| **DHT11** | Data (One-Wire) | GPIO17 | GPIO (Bidirectional) | Verified M3; active in Class 1 |
-| **CD4051 MUX** | Sel A | GPIO4 | GPIO Output | Verified M3; active in Class 1 |
-| **CD4051 MUX** | Sel B | GPIO2 | GPIO Output | Verified M3; active in Class 1 |
-| **CD4051 MUX** | Sel C | GPIO5 | GPIO Output | Verified M3; active in Class 1 |
+| **LDR** | Analog In | GPIO35 | ADC1 Ch7 (Input only) | Verified M3/M10; active in Class 1 |
+| **DHT11** | Data (One-Wire) | GPIO19 | GPIO (Bidirectional) | Verified M3/M10; async worker + Class 1 cache |
+| **CD4051 MUX** | Sel A | GPIO4 | GPIO Output | Verified M3/M10; active in Class 1 |
+| **CD4051 MUX** | Sel B | GPIO2 | GPIO Output | Verified M3/M10; active in Class 1 |
+| **CD4051 MUX** | Sel C | GPIO5 | GPIO Output | Verified M3/M10; active in Class 1 |
 | **CD4051 MUX** | Common Out | GPIO36 | ADC1 Ch0 (Input only) | Shared between X0 and X1 |
-| **CD4051 X0** | Gas/IR HW-870 | MUX Ch0 | Analog Mux Channel | Verified M3; active in Class 1 |
-| **CD4051 X1** | Hall Effect (IC2) | MUX Ch1 | Analog Mux Channel | **Integrated M9**; active in Class 1 |
-| **MOC7811** | Optical Slot In | GPIO34 | GPI (Input only) | **Integrated M9**; requires external pull-up |
-| **HC-SR04** | Trigger | GPIO25 | GPIO Output | **Integrated M9**; 10 µs pulse |
-| **HC-SR04** | Echo | GPIO26 | GPIO Input | **Integrated M9**; 5V hazard (inhibited) |
+| **CD4051 X0** | Gas/IR HW-870 | MUX Ch0 | Analog Mux Channel | Verified M3/M10; active in Class 1 |
+| **CD4051 X1** | Hall Effect (IC2) | MUX Ch1 | Analog Mux Channel | **Integrated M9**; IC2 unpopulated on PCB V14 (reads floating mux noise) |
+| **MOC7811** | Optical Slot In | GPIO34 | GPI (Input only) | **Integrated M9 / Qualified M10**; external 10k pull-up R7 on PCB |
+| **HC-SR04** | Trigger | GPIO25 | GPIO Output | **Integrated M9 / Qualified M10**; 10 µs pulse, 20 ms budget |
+| **HC-SR04** | Echo | GPIO26 | GPIO Input | **Integrated M9 / Qualified M10**; Echo <= 3.3V verified in M10 |
 | **TSOP1838** | IR Receiver | GPIO1 | UART0 TXD | **STRICTLY BARRED** (UART0 console conflict) |
 
 ---

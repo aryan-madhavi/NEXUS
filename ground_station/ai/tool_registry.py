@@ -74,7 +74,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     },
                     "signal": {
                         "type": "string",
-                        "description": "Signal name: 'temp', 'hum', 'ldr_raw', 'x0_raw', 'dht_valid', 'free_heap', 'exec_ticks', etc.",
+                        "description": "Signal name: 'temp', 'hum', 'ldr_raw', 'x0_raw', 'x1_raw', 'slot_state', 'dist_cm', 'dht_valid', 'free_heap', 'exec_ticks', etc.",
                     },
                     "window": {
                         "type": "string",
@@ -99,7 +99,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     },
                     "signal": {
                         "type": "string",
-                        "description": "Signal name: 'temp', 'hum', 'ldr_raw', 'x0_raw', 'free_heap', etc.",
+                        "description": "Signal name: 'temp', 'hum', 'ldr_raw', 'x0_raw', 'x1_raw', 'slot_state', 'dist_cm', 'free_heap', etc.",
                     },
                     "window": {
                         "type": "string",

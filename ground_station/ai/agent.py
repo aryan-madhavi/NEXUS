@@ -221,11 +221,11 @@ class NexusConversationalAgent:
         tool_calls = msg1.get("tool_calls", [])
 
         if not tool_calls:
-            # Model responded directly without calling tools
-            return AgentResponse(
-                content=msg1.get("content", "").strip(),
-                model=self.model,
-            )
+            # Model responded directly without calling tools; enforce tool-grounded response via fallback router
+            logger.info("Model returned no tool_calls for query '%s'; enforcing tool grounding via fallback.", user_query)
+            fallback_resp = self._run_deterministic_fallback(user_query)
+            fallback_resp.fallback_used = True
+            return fallback_resp
 
         messages.append(msg1)
 
@@ -343,8 +343,14 @@ class NexusConversationalAgent:
                 sig = "hum"
             elif "ldr" in q or "light" in q:
                 sig = "ldr_raw"
-            elif "x0" in q or "gas" in q:
+            elif "x0" in q or "gas" in q or "hw870" in q:
                 sig = "x0_raw"
+            elif "x1" in q or "hall" in q:
+                sig = "x1_raw"
+            elif "slot" in q or "moc7811" in q or "optical" in q:
+                sig = "slot_state"
+            elif "dist" in q or "ultrasonic" in q or "hcsr04" in q:
+                sig = "dist_cm"
             elif "heap" in q:
                 sig = "free_heap"
             tool_name = "get_signal_trend"
@@ -362,8 +368,14 @@ class NexusConversationalAgent:
                 sig = "hum"
             elif "ldr" in q or "light" in q:
                 sig = "ldr_raw"
-            elif "x0" in q or "gas" in q:
+            elif "x0" in q or "gas" in q or "hw870" in q:
                 sig = "x0_raw"
+            elif "x1" in q or "hall" in q:
+                sig = "x1_raw"
+            elif "slot" in q or "moc7811" in q or "optical" in q:
+                sig = "slot_state"
+            elif "dist" in q or "ultrasonic" in q or "hcsr04" in q:
+                sig = "dist_cm"
             elif "heap" in q:
                 sig = "free_heap"
             tool_name = "get_signal_statistics"
@@ -386,6 +398,25 @@ class NexusConversationalAgent:
 
         # Execute selected tool
         res: ToolResult = self.dispatcher.dispatch(tool_name, tool_args)
+        if (
+            not dev_match
+            and tool_args.get("device_id") == "esp32_01"
+            and res.success
+            and (
+                res.data.get("has_telemetry") is False
+                or res.data.get("total_samples") == 0
+                or res.data.get("sample_count") == 0
+            )
+        ):
+            alt_args = dict(tool_args, device_id="nexus_esp32")
+            alt_res = self.dispatcher.dispatch(tool_name, alt_args)
+            if alt_res.success and (
+                alt_res.data.get("has_telemetry") is True
+                or (alt_res.data.get("total_samples") or 0) > 0
+                or (alt_res.data.get("sample_count") or 0) > 0
+            ):
+                tool_args = alt_args
+                res = alt_res
         content = self._format_deterministic_explanation(tool_name, tool_args, res)
 
         return AgentResponse(
@@ -412,19 +443,29 @@ class NexusConversationalAgent:
             dht_valid = sensors.get("dht_valid")
             ldr = sensors.get("ldr_raw")
             x0 = sensors.get("x0_raw_adc")
+            x1 = sensors.get("x1_raw_adc")
+            slot_state = sensors.get("slot_state")
+            dist_cm = sensors.get("dist_cm")
             t_str = f"{temp}°C" if temp is not None else ("INVALID" if dht_valid is False else "None")
             h_str = f"{hum}%" if hum is not None else ("INVALID" if dht_valid is False else "None")
             uptime_ms = data.get("uptime_ms")
             uptime_desc = f"{uptime_ms} ms (~{uptime_ms / 1000.0:.1f}s since last boot/reset)" if isinstance(uptime_ms, (int, float)) else "Unknown"
-            return (
-                f"Latest telemetry for {data.get('device_id')} at {data.get('host_time')} UTC (uptime {uptime_desc}, seq {data.get('seq')}):\n"
-                f"- Temperature: {t_str}\n"
-                f"- Humidity: {h_str}\n"
-                f"- DHT Valid Flag: {dht_valid}\n"
-                f"- LDR Raw ADC: {ldr}\n"
-                f"- X0 Raw ADC: {x0} (Note: raw ADC count from MUX input 0, not a calibrated gas concentration)\n"
-                f"- Transports: {', '.join(data.get('transports', []))}"
-            )
+            lines = [
+                f"Latest telemetry for {data.get('device_id')} at {data.get('host_time')} UTC (uptime {uptime_desc}, seq {data.get('seq')}):",
+                f"- Temperature: {t_str}",
+                f"- Humidity: {h_str}",
+                f"- DHT Valid Flag: {dht_valid}",
+                f"- LDR Raw ADC: {ldr}",
+                f"- X0 Raw ADC: {x0} (Note: raw ADC count from MUX input 0, not a calibrated gas concentration)",
+            ]
+            if x1 is not None:
+                lines.append(f"- X1 Raw ADC: {x1} (Note: MUX input 1; Hall Effect IC2 is unpopulated on EDU_ROBO V14 PCB)")
+            if slot_state is not None:
+                lines.append(f"- MOC7811 Optical Slot State: {slot_state} (0 = unblocked, 1 = blocked)")
+            if dist_cm is not None:
+                lines.append(f"- HC-SR04 Ultrasonic Distance: {dist_cm} cm")
+            lines.append(f"- Transports: {', '.join(data.get('transports', []))}")
+            return "\n".join(lines)
 
         elif tool_name == "get_telemetry_freshness":
             stale_str = "STALE" if data.get("is_stale") else "FRESH"
