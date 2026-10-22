@@ -1,0 +1,19 @@
+# NEXUS Simultaneous Multi-Transport Capture
+# Started: 2026-10-20 18:45:24.154Z
+
+[2026-10-20 18:45:25.083Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":1,"type":"hb","uptime":337,"heap":198676,"ticks":1}
+[2026-10-20 18:45:25.116Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":2,"type":"status","uptime":384,"disp":7,"comp":5,"fail":1,"lat_us":0,"dur_us":11560}
+[2026-10-20 18:45:25.317Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":3,"type":"telem","uptime":384,"ldr":17,"x0":1439,"x1":1428,"dht_valid":false,"slot":0}
+[2026-10-20 18:45:26.308Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":4,"type":"hb","uptime":1430,"heap":202816,"ticks":12}
+[2026-10-20 18:45:27.137Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":5,"type":"telem","uptime":2430,"ldr":22,"x0":53,"x1":48,"dht_valid":false,"slot":0}
+[2026-10-20 18:45:27.407Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":6,"type":"hb","uptime":2530,"heap":202816,"ticks":23}
+[2026-10-20 18:45:28.512Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":7,"type":"hb","uptime":3630,"heap":202816,"ticks":34}
+[2026-10-20 18:45:29.312Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":8,"type":"telem","uptime":4430,"ldr":22,"x0":0,"x1":0,"temp":32,"hum":67,"dht_valid":true,"slot":0}
+[2026-10-20 18:45:29.513Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":9,"type":"hb","uptime":4630,"heap":202868,"ticks":44}
+[2026-10-20 18:45:30.307Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":10,"type":"status","uptime":5449,"disp":38,"comp":31,"fail":6,"lat_us":99996,"dur_us":34234}
+[2026-10-20 18:45:30.504Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":11,"type":"hb","uptime":5630,"heap":202860,"ticks":54}
+[2026-10-20 18:45:31.316Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":12,"type":"telem","uptime":6431,"ldr":20,"x0":46,"x1":46,"temp":32,"hum":67,"dht_valid":true,"slot":0}
+[2026-10-20 18:45:31.517Z] [serial] {"ver":1,"dev":"nexus_esp32","seq":13,"type":"hb","uptime":6630,"heap":201060,"ticks":64}
+[2026-10-20 18:45:32.963Z] [mqtt] {"ver":1,"dev":"nexus_esp32","seq":14,"type":"hb","uptime":7730,"heap":193760,"ticks":75}
+[2026-10-20 18:45:33.989Z] [mqtt] {"ver":1,"dev":"nexus_esp32","seq":15,"type":"telem","uptime":8531,"ldr":23,"x0":32,"x1":33,"temp":32,"hum":67,"dht_valid":true,"slot":0}
+[2026-10-20 18:45:34.008Z] [mqtt] {"ver":1,"dev":"nexus_esp32","seq":16,"type":"hb","uptime":8730,"heap":193524,"ticks":85}

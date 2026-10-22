@@ -1,0 +1,16 @@
+# NEXUS Phase 6.1 Serial Ingestion Capture
+# Started: 2026-10-20 18:43:31.715Z
+# Port: /dev/ttyUSB0, Baud: 115200
+
+[2026-10-20 18:43:32.644Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":1,"type":"hb","uptime":337,"heap":198676,"ticks":1}
+[2026-10-20 18:43:32.678Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":3,"type":"telem","uptime":382,"ldr":793,"x0":1429,"x1":1424,"dht_valid":false,"slot":0}
+[2026-10-20 18:43:33.874Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":4,"type":"hb","uptime":1430,"heap":202976,"ticks":12}
+[2026-10-20 18:43:34.686Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":5,"type":"hb","uptime":2430,"heap":202816,"ticks":22}
+[2026-10-20 18:43:34.703Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":6,"type":"telem","uptime":2432,"ldr":963,"x0":19,"x1":18,"dht_valid":false,"slot":0}
+[2026-10-20 18:43:35.873Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":7,"type":"hb","uptime":3430,"heap":202816,"ticks":32}
+[2026-10-20 18:43:36.684Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":8,"type":"hb","uptime":4430,"heap":202868,"ticks":42}
+[2026-10-20 18:43:36.885Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":9,"type":"telem","uptime":4431,"ldr":931,"x0":29,"x1":30,"temp":32,"hum":67,"dht_valid":true,"slot":0}
+[2026-10-20 18:43:37.684Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":10,"type":"hb","uptime":5430,"heap":202860,"ticks":52}
+[2026-10-20 18:43:37.907Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":11,"type":"status","uptime":5462,"disp":42,"comp":34,"fail":7,"lat_us":99998,"dur_us":31707}
+[2026-10-20 18:43:38.688Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":12,"type":"hb","uptime":6430,"heap":201040,"ticks":62}
+[2026-10-20 18:43:38.889Z] [ENVELOPE] {"ver":1,"dev":"nexus_esp32","seq":13,"type":"telem","uptime":6432,"ldr":895,"x0":32,"x1":29,"temp":32,"hum":68,"dht_valid":true,"slot":0}

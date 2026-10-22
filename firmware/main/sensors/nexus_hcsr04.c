@@ -15,7 +15,7 @@ typedef struct {
 
 static nexus_hcsr04_ctx_t s_hcsr04_ctx = { 0 };
 static bool s_hcsr04_initialized = false;
-static bool s_live_hw_enabled = false; /* Inhibited by default for 5V echo protection */
+static bool s_live_hw_enabled = true; /* Live hardware enabled per user authorization (Echo <= 3.3V verified) */
 
 #ifndef ESP_PLATFORM
 static bool s_mock_success = true;
@@ -139,6 +139,8 @@ bool nexus_hcsr04_init(nexus_sensor_registry_t *registry)
                      NEXUS_GPIO_HCSR04_ECHO, esp_err_to_name(err));
             return false;
         }
+        ESP_LOGI(TAG, "HC-SR04 initialized (live hardware acquisition ENABLED on TRIG=IO%u, ECHO=IO%u).",
+                 NEXUS_GPIO_HCSR04_TRIG, NEXUS_GPIO_HCSR04_ECHO);
     } else {
         ESP_LOGI(TAG, "HC-SR04 initialized (safe inhibited mode; GPIOs %u and %u unconfigured pending voltage check).",
                  NEXUS_GPIO_HCSR04_TRIG, NEXUS_GPIO_HCSR04_ECHO);
@@ -211,19 +213,31 @@ bool nexus_hcsr04_read(nexus_hcsr04_reading_t *out_reading)
     esp_rom_delay_us(10);
     gpio_set_level((gpio_num_t)NEXUS_GPIO_HCSR04_TRIG, 0);
 
-    /* 2. Wait for Echo to rise (bounded timeout: 2000 us) */
+    /* 2. Wait for Echo to rise (bounded timeout: 8000 us) */
+    int initial_echo = gpio_get_level((gpio_num_t)NEXUS_GPIO_HCSR04_ECHO);
     int64_t wait_start = esp_timer_get_time();
     while (gpio_get_level((gpio_num_t)NEXUS_GPIO_HCSR04_ECHO) == 0) {
-        if ((esp_timer_get_time() - wait_start) > 2000LL) {
+        if ((esp_timer_get_time() - wait_start) > 8000LL) {
+            static int64_t last_warn_rise = 0;
+            if (esp_timer_get_time() - last_warn_rise > 3000000LL) {
+                last_warn_rise = esp_timer_get_time();
+                ESP_LOGW(TAG, "Echo wait-rise timeout (initial=%d, cur=%d)",
+                         initial_echo, gpio_get_level((gpio_num_t)NEXUS_GPIO_HCSR04_ECHO));
+            }
             out_reading->status = NEXUS_HCSR04_STATUS_TIMEOUT;
             return false;
         }
     }
 
-    /* 3. Measure Echo high duration (bounded timeout: 25000 us ~ 4.3 meters) */
+    /* 3. Measure Echo high duration (bounded timeout) */
     int64_t echo_start = esp_timer_get_time();
     while (gpio_get_level((gpio_num_t)NEXUS_GPIO_HCSR04_ECHO) == 1) {
         if ((esp_timer_get_time() - echo_start) > (int64_t)NEXUS_HCSR04_DEFAULT_TIMEOUT_US) {
+            static int64_t last_warn_fall = 0;
+            if (esp_timer_get_time() - last_warn_fall > 3000000LL) {
+                last_warn_fall = esp_timer_get_time();
+                ESP_LOGW(TAG, "Echo wait-fall timeout (> %u us)", NEXUS_HCSR04_DEFAULT_TIMEOUT_US);
+            }
             out_reading->status = NEXUS_HCSR04_STATUS_TIMEOUT;
             return false;
         }
@@ -237,6 +251,8 @@ bool nexus_hcsr04_read(nexus_hcsr04_reading_t *out_reading)
         out_reading->status = NEXUS_HCSR04_STATUS_OUT_OF_RANGE;
         return false;
     }
+
+    ESP_LOGI(TAG, "Echo OK: echo=%u us, dist=%" PRId32 " cm", echo_duration, dist);
 
     out_reading->distance_cm = dist;
     out_reading->echo_duration_us = echo_duration;

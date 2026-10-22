@@ -139,7 +139,7 @@ bool nexus_sensors_register_jobs(nexus_sensor_registry_t *registry, nexus_execut
                                                   hcsr04_wrapper_job,
                                                   &s_hcsr04_job_ctx,
                                                   NEXUS_HCSR04_INTERVAL_MS,
-                                                  10U);
+                                                  20U);
 
     return (id_ldr != 0 && id_mux != 0 && id_dht != 0 && id_moc != 0 && id_ult != 0);
 }

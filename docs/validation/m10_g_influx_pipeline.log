@@ -1,0 +1,86 @@
+# NEXUS Milestone 10 — Phase G InfluxDB Pipeline & Grafana Observability Audit
+# Executed: 2026-10-22T08:26:19Z
+# Transport: Wi-Fi/MQTT (127.0.0.1:1883) -> InfluxDB nexus_telemetry bucket
+# ==============================================================================
+
+# --- SECTION 1: INFLUXDB BUCKET VERIFICATION ---
+Bucket Name:    nexus_telemetry
+Bucket ID:      4da20b318f2bbe30
+Other Buckets:  _monitoring, _tasks (internal)
+
+# --- SECTION 2: INGESTION SESSION STATS (90s run) ---
+Total Envelopes Ingested:  149
+Envelopes by Type:         hb=88, telem=44, status=17
+Devices Observed:          nexus_esp32
+Sequence Range:            first=3810, last=3958
+Uptime Range (ms):         first=2301450, last=2391151
+DHT Samples:               valid=40, invalid=4
+
+MQTT Transport:
+  Connect Count:           1
+  Disconnect Count:        1
+  Messages Received:       149
+  Messages Forwarded:      149
+  Topic Mismatches:        0
+  Identity Mismatches:     0
+  IO Errors:               0
+
+Host Manager:
+  Messages Parsed:         149
+  Parse Errors:            0
+  Enqueued:                149
+  Queue Overflow Drops:    0
+
+InfluxDB Writer:
+  Accepted Records:        149
+  Successful Writes:       149
+  Write Failures:          0
+  Retries:                 0
+  Permanent Drops:         0
+VERDICT: PASS (100% write success, zero drops)
+
+# --- SECTION 3: INFLUXDB DIRECT STORAGE VERIFICATION ---
+Measurement: nexus_hb     | exec_ticks  count=88
+Measurement: nexus_hb     | free_heap   count=88
+Measurement: nexus_hb     | seq         count=88
+Measurement: nexus_hb     | uptime_ms   count=88
+Measurement: nexus_status | completed   count=17
+Measurement: nexus_status | dispatched  count=17
+Measurement: nexus_status | failed      count=17
+Measurement: nexus_status | max_dur_us  count=17
+Measurement: nexus_status | max_lat_us  count=17
+Measurement: nexus_telem  | dht_valid   count=44
+Measurement: nexus_telem  | dist_cm     count=44
+Measurement: nexus_telem  | hum         count=40  (4 invalid omitted correctly)
+Measurement: nexus_telem  | ldr_raw     count=44
+Measurement: nexus_telem  | slot_state  count=44
+Measurement: nexus_telem  | temp        count=40  (4 invalid omitted correctly)
+Measurement: nexus_telem  | x0_raw      count=44
+Measurement: nexus_telem  | x1_raw      count=44
+VERDICT: PASS (all measurements persisted, invalid DHT correctly gated)
+
+# --- SECTION 4: GRAFANA OBSERVABILITY AUDIT ---
+Grafana Health:            200 OK
+Datasource:                InfluxDB_Flux (id=1) -> http://influxdb:8086, default=True
+DS Health Check:           "datasource is working. 3 buckets found" -> OK
+
+Dashboard: "NEXUS Telemetry & Device Health" (uid=nexus_telemetry_health, version=2)
+  Row: Environmental Telemetry
+    [P1] Ambient Temperature       -> _field=temp
+    [P2] Relative Humidity         -> _field=hum
+    [P3] DHT Sensor Health (stat)  -> _field=dht_valid
+    [P4] Device Uptime (stat)      -> _field=uptime_ms
+  Row: Analog Raw Sensors (ADC)
+    [P5] LDR Raw Reading           -> _field=ldr_raw
+    [P6] X0 Raw Reading (ADC)      -> _field=x0_raw
+  Row: Device Health & Executive Performance
+    [P7] Device Free Heap          -> _field=free_heap
+    [P8] Executive Loop Ticks      -> _field=exec_ticks
+  Row: Extended Sensor Suite (M9/M10 Qualification)
+    [P9]  Hall Effect IC2 (X1 ADC) -> _field=x1_raw   [NOTE: IC2 unpopulated, data is mux channel noise]
+    [P10] MOC7811 Slot Beam State  -> _field=slot_state
+    [P11] HC-SR04 Ultrasonic Dist  -> _field=dist_cm
+VERDICT: PASS (11/11 panels provisioned, datasource connected, queries mapped to qualified fields)
+
+# --- SUMMARY ---
+Phase G Overall:  PASS

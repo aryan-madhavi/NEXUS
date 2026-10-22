@@ -1,0 +1,35 @@
+# NEXUS Milestone 10 — Phase F Command Dispatcher Qualification Log
+# Executed: 2026-10-22T08:20:06Z
+# Device Target: nexus_esp32 via Wi-Fi/MQTT Transport (127.0.0.1:1883)
+# ==============================================================================
+
+# Command: NOP NONE (seq=107197, cmd_id=0)
+CMD:  {"ver":1,"dev":"nexus_esp32","seq":107197,"type":"cmd","cmd_id":0,"verb":"NOP","noun":"NONE"}
+RESP: {"ver":1,"dev":"nexus_esp32","seq":107197,"type":"resp","cmd_id":0,"verb":"NOP","noun":"NONE","status":"completed","code":0,"msg":"NOP success","uptime":2009033}
+VERDICT: PASS (roundtrip=0.2s)
+
+# Command: GET STATUS (seq=107198, cmd_id=1537)
+CMD:  {"ver":1,"dev":"nexus_esp32","seq":107198,"type":"cmd","cmd_id":1537,"verb":"GET","noun":"STATUS"}
+RESP: {"ver":1,"dev":"nexus_esp32","seq":107198,"type":"resp","cmd_id":1537,"verb":"GET","noun":"STATUS","status":"completed","code":0,"msg":"Status retrieved","uptime":2010162,"heap":193192,"ticks":20099,"state":2}
+VERDICT: PASS (roundtrip=0.1s)
+
+# Command: DIAGNOSTICS SYSTEM (seq=107199, cmd_id=6145)
+CMD:  {"ver":1,"dev":"nexus_esp32","seq":107199,"type":"cmd","cmd_id":6145,"verb":"DIAGNOSTICS","noun":"SYSTEM"}
+RESP: {"ver":1,"dev":"nexus_esp32","seq":107199,"type":"resp","cmd_id":6145,"verb":"DIAGNOSTICS","noun":"SYSTEM","status":"completed","code":0,"msg":"System diagnostics","uptime":2011264,"heap":193884,"reset_reason":1,"ticks":20110}
+VERDICT: PASS (roundtrip=1.101s)
+
+# Command: DISPLAY EXECUTIVE (seq=107200, cmd_id=4098)
+CMD:  {"ver":1,"dev":"nexus_esp32","seq":107200,"type":"cmd","cmd_id":4098,"verb":"DISPLAY","noun":"EXECUTIVE"}
+RESP: {"ver":1,"dev":"nexus_esp32","seq":107200,"type":"resp","cmd_id":4098,"verb":"DISPLAY","noun":"EXECUTIVE","status":"completed","code":0,"msg":"Executive metrics","uptime":2013377,"disp":13819,"comp":13710,"fail":109,"dline":0}
+VERDICT: PASS (roundtrip=1.101s)
+
+# Command: RUN SELF_TEST (seq=107201, cmd_id=8449)
+CMD:  {"ver":1,"dev":"nexus_esp32","seq":107201,"type":"cmd","cmd_id":8449,"verb":"RUN","noun":"SELF_TEST"}
+RESP: {"ver":1,"dev":"nexus_esp32","seq":107201,"type":"resp","cmd_id":8449,"verb":"RUN","noun":"SELF_TEST","status":"completed","code":0,"msg":"Self-test passed","uptime":2015470,"selftest":true}
+VERDICT: PASS (roundtrip=0.3s)
+
+# Command: UNKNOWN COMMAND (seq=107202, cmd_id=9999)
+CMD:  {"ver":1,"dev":"nexus_esp32","seq":107202,"type":"cmd","cmd_id":9999,"verb":"UNKNOWN","noun":"COMMAND"}
+RESP: {"ver":1,"dev":"nexus_esp32","seq":107202,"type":"resp","cmd_id":9999,"verb":"UNKNOWN","noun":"COMMAND","status":"rejected","code":2,"msg":"Unrecognized command or verb-noun combination","uptime":2016815}
+VERDICT: PASS (roundtrip=0.2s)
+
