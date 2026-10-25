@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+ARG="${1:-help}"
+
+case "${ARG}" in
+    start)
+        ./scripts/nexus-demo-start.sh
+        ;;
+    status)
+        ./scripts/nexus-demo-status.sh
+        ;;
+    stop)
+        ./scripts/nexus-demo-stop.sh
+        ;;
+    flash)
+        ./scripts/nexus-board.sh flash "${@:2}"
+        ;;
+    esptool-flash)
+        ./scripts/nexus-board.sh esptool-flash "${@:2}"
+        ;;
+    erase)
+        ./scripts/nexus-board.sh erase "${@:2}"
+        ;;
+    monitor)
+        ./scripts/nexus-board.sh monitor "${@:2}"
+        ;;
+    test-monitor)
+        ./scripts/nexus-board.sh test-monitor "${@:2}"
+        ;;
+    -h|--help|help)
+        echo "Usage: $0 [OPTIONS]"
+        echo ""
+        echo "Options:"
+        echo "  start         Starts and verifies all required NEXUS services"
+        echo "  status        Displays status of all NEXUS services"
+        echo "  stop          Gracefully shuts down all required NEXUS services"
+        echo "  flash         Builds and flashes firmware to ESP32 via idf.py"
+        echo "  esptool-flash Direct esptool flash with --before default-reset --after hard-reset"
+        echo "  erase         Erases entire ESP32 flash chip via esptool"
+        echo "  monitor       Opens interactive serial monitor on the ESP32 (Ctrl+] to exit)"
+        echo "  test-monitor  Automated capture of serial telemetry stream for N seconds"
+        echo "  help          Display this help message"
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: ${ARG}"
+        echo "Run '$0 help' for usage."
+        exit 1
+        ;;
+esac
