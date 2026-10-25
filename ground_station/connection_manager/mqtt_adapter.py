@@ -366,6 +366,25 @@ class MqttTransportAdapter(TransportAdapter):
             except Exception as err:
                 logger.error("Error in MQTT on_receive callback: %s", err)
 
+    def publish_command(self, topic: str, payload: Union[str, bytes], qos: int = 1) -> bool:
+        """Publish a command envelope to an ESP32 command topic."""
+        with self._lock:
+            client = self._client
+            connected = self._is_connected
+        if not connected or client is None:
+            logger.warning("Cannot publish command: MQTT transport is not connected")
+            return False
+
+        try:
+            res = client.publish(topic, payload, qos=qos)
+            res.wait_for_publish(timeout=2.0)
+            return True
+        except Exception as err:
+            logger.error("Failed to publish command to MQTT topic %s: %s", topic, err)
+            with self._lock:
+                self._io_errors += 1
+            return False
+
     def get_stats(self) -> MqttStats:
         """Return a snapshot of MQTT adapter telemetry."""
         with self._lock:

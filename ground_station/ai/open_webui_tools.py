@@ -41,13 +41,13 @@ class Tools:
         from ground_station.ai.tools import NexusAITools
         self._tools = NexusAITools()
 
-    def get_latest_telemetry(self, device_id: str = "esp32_01") -> str:
+    def get_latest_telemetry(self, device_id: str = "nexus_esp32") -> str:
         """Get latest telemetry readings (temperature, humidity, LDR raw ADC, X0 raw ADC, DHT validity).
 
-        Note: x0_raw_adc is the raw numeric ADC count (0-4095) from MUX channel 0; report its numeric count as uncalibrated raw ADC, not gas ppm.
+        Note: x0_raw_adc is the raw numeric ADC count (0-4095) from MUX channel 0 (HW-870 IR photodetector); report its numeric count as uncalibrated raw ADC, not gas ppm.
         Temperature and humidity are null if dht_valid is False to prevent invalid data interpretation.
 
-        :param device_id: Device identifier (e.g. 'esp32_01', 'nexus_esp32').
+        :param device_id: Device identifier (e.g. 'nexus_esp32', 'esp32_01').
         :return: JSON formatted string containing latest sensor observations and reception metadata.
         """
         try:
@@ -57,10 +57,10 @@ class Tools:
             logger.error("Error in get_latest_telemetry: %s", e)
             return json.dumps({"success": False, "error": f"Failed to retrieve telemetry: {e}"})
 
-    def get_telemetry_freshness(self, device_id: str = "esp32_01", msg_type: str = "telem") -> str:
+    def get_telemetry_freshness(self, device_id: str = "nexus_esp32", msg_type: str = "telem") -> str:
         """Inspect telemetry arrival age, expected cadence, and stale status.
 
-        :param device_id: Device identifier (default: 'esp32_01').
+        :param device_id: Device identifier (default: 'nexus_esp32').
         :param msg_type: Message type to evaluate ('telem', 'hb', or 'status'). Default: 'telem'.
         :return: JSON formatted string detailing freshness status, arrival lag, and last sequence number.
         """
@@ -73,13 +73,13 @@ class Tools:
 
     def get_signal_statistics(
         self,
-        device_id: str = "esp32_01",
+        device_id: str = "nexus_esp32",
         signal: str = "temp",
         window: str = "-15m",
     ) -> str:
         """Compute summary statistics (min, max, mean, count) for a signal over a bounded window without truncation.
 
-        :param device_id: Device identifier (default: 'esp32_01').
+        :param device_id: Device identifier (default: 'nexus_esp32').
         :param signal: Permitted signal name ('temp', 'hum', 'ldr_raw', 'x0_raw', 'x1_raw', 'slot_state', 'dist_cm', 'free_heap', 'exec_ticks').
         :param window: Relative duration window (e.g. '-15m', '-1h', '-24h'). Default: '-15m'.
         :return: JSON formatted string containing statistical aggregates.
@@ -93,13 +93,13 @@ class Tools:
 
     def get_signal_trend(
         self,
-        device_id: str = "esp32_01",
+        device_id: str = "nexus_esp32",
         signal: str = "temp",
         window: str = "-15m",
     ) -> str:
         """Compute rate-of-change slope and directional trend (RISING, FALLING, STABLE) over a time window.
 
-        :param device_id: Device identifier (default: 'esp32_01').
+        :param device_id: Device identifier (default: 'nexus_esp32').
         :param signal: Numeric signal name ('temp', 'hum', 'ldr_raw', 'x0_raw', 'x1_raw', 'slot_state', 'dist_cm', 'free_heap').
         :param window: Relative duration window (e.g. '-15m', '-1h'). Default: '-15m'.
         :return: JSON formatted string containing trend direction, slope per minute, and delta.
@@ -113,12 +113,12 @@ class Tools:
 
     def audit_sensor_quality(
         self,
-        device_id: str = "esp32_01",
+        device_id: str = "nexus_esp32",
         window: str = "-15m",
     ) -> str:
         """Audit sensor reading quality flags and invalid sample ratios over an evaluation window.
 
-        :param device_id: Device identifier (default: 'esp32_01').
+        :param device_id: Device identifier (default: 'nexus_esp32').
         :param window: Relative duration window (e.g. '-15m', '-1h'). Default: '-15m'.
         :return: JSON formatted string detailing total envelopes, valid DHT count, and invalid ratio.
         """

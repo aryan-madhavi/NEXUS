@@ -27,7 +27,7 @@ ALLOWED_SCHEMES: Set[str] = {"http", "https"}
 DEFAULT_ALLOWED_HOSTS: Set[str] = {"localhost", "127.0.0.1", "10.12.252.18"}
 
 # Strict allowable ports
-DEFAULT_ALLOWED_PORTS: Set[int] = {80, 443, 3000, 8000, 8080, 9090}
+DEFAULT_ALLOWED_PORTS: Set[int] = {80, 443, 3000, 8000, 8080, 8086, 9090}
 
 # Disallowed characters that could indicate command/argument injection
 DISALLOWED_URL_CHARS_PATTERN = re.compile(r"[\x00-\x1f\x7f\s;`|&$><\"']")
@@ -130,6 +130,8 @@ class ApplicationLauncher:
             "LOGS": os.environ.get("LOGS_URL", "http://127.0.0.1:3000/explore"),
             "AI": os.environ.get("OPEN_WEBUI_URL", "http://127.0.0.1:8080"),
             "GROUND": os.environ.get("GROUND_STATION_URL", "http://127.0.0.1:8000/overview"),
+            "DATABASE": os.environ.get("INFLUXDB_URL", "http://127.0.0.1:8086"),
+            "DIAGNOSTICS": os.environ.get("DIAGNOSTICS_URL", "http://127.0.0.1:8000/diagnostics"),
         }
         if urls:
             for k, v in urls.items():

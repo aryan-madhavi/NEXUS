@@ -31,7 +31,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 "properties": {
                     "device_id": {
                         "type": "string",
-                        "description": "Device identifier (default: 'esp32_01').",
+                        "description": "Device identifier (default: 'nexus_esp32').",
                     }
                 },
                 "required": ["device_id"],
@@ -48,7 +48,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 "properties": {
                     "device_id": {
                         "type": "string",
-                        "description": "Device identifier (default: 'esp32_01').",
+                        "description": "Device identifier (default: 'nexus_esp32').",
                     },
                     "msg_type": {
                         "type": "string",
@@ -70,7 +70,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 "properties": {
                     "device_id": {
                         "type": "string",
-                        "description": "Device identifier (default: 'esp32_01').",
+                        "description": "Device identifier (default: 'nexus_esp32').",
                     },
                     "signal": {
                         "type": "string",
@@ -95,7 +95,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 "properties": {
                     "device_id": {
                         "type": "string",
-                        "description": "Device identifier (default: 'esp32_01').",
+                        "description": "Device identifier (default: 'nexus_esp32').",
                     },
                     "signal": {
                         "type": "string",
@@ -120,7 +120,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 "properties": {
                     "device_id": {
                         "type": "string",
-                        "description": "Device identifier (default: 'esp32_01').",
+                        "description": "Device identifier (default: 'nexus_esp32').",
                     },
                     "window": {
                         "type": "string",

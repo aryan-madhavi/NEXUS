@@ -197,8 +197,8 @@ class NexusAITools:
                     "dist_cm": fields.get("dist_cm"),
                 },
                 "notes": [
-                    "x0_raw_adc is the raw numeric ADC count from MUX input 0 (Gas sensor); state numeric count as uncalibrated raw ADC, not calibrated gas ppm.",
-                    "x1_raw_adc is the raw numeric ADC count from MUX input 1 (Hall-effect magnetic sensor); state numeric count as uncalibrated raw ADC, not calibrated Gauss/Tesla.",
+                    "x0_raw_adc is the raw numeric ADC count from MUX input 0 (Infrared sensor / photodetector HW-870); state numeric count as uncalibrated raw ADC (0-4095), not calibrated gas ppm.",
+                    "x1_raw_adc is the raw numeric ADC count from MUX input 1 (Hall-effect magnetic sensor IC2; unpopulated on EDU_ROBO V14 hardware).",
                     "slot_state is the optical slot sensor state (0 = unblocked, 1 = blocked).",
                     "dist_cm is ultrasonic distance in cm (null or negative indicates unverified voltage hazard or inhibited acquisition).",
                     "temperature_c and humidity_pct are null if dht_valid is False to prevent invalid sensor usage.",
@@ -346,7 +346,7 @@ class NexusAITools:
             sig = self._validate_signal(signal)
             win = self._validate_window(window)
 
-            trend = TelemetryStatistics.compute_trend(
+            trend = TelemetryStatistics.calculate_trend(
                 query_service=self.query_service,
                 dev=dev,
                 signal=sig,

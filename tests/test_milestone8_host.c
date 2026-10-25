@@ -28,7 +28,7 @@ static void test_registry_integrity(void)
 
     size_t count = 0;
     const nexus_cmd_registry_entry_t *all_entries = nexus_cmd_registry_get_all(&count);
-    TEST_ASSERT(count == 52, "Expected exactly 52 candidate command entries");
+    TEST_ASSERT(count == 115, "Expected exactly 115 candidate command entries");
     TEST_ASSERT(count == NEXUS_CANDIDATE_COMMANDS_COUNT, "Expected count to match NEXUS_CANDIDATE_COMMANDS_COUNT macro");
 
     /* Check for duplicate IDs or duplicate verb-noun pairs */
@@ -111,7 +111,9 @@ static void test_supported_commands_execution(void)
     const char *cmd_sl = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":4,\"type\":\"cmd\",\"verb\":\"GET\",\"noun\":\"SENSOR_LIST\"}\n";
     ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_sl, strlen(cmd_sl), &resp);
     TEST_ASSERT(ok, "GET SENSOR_LIST execution");
-    TEST_ASSERT(strstr((char *)resp.buffer, "\"sensors\":[\"ldr\",\"cd4051\",\"dht11\"]") != NULL, "Sensors list matches");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"sensors\":[") != NULL &&
+                strstr((char *)resp.buffer, "\"ldr\"") != NULL &&
+                strstr((char *)resp.buffer, "\"dht11\"") != NULL, "Sensors list matches");
 
     /* 5. GET TIME */
     const char *cmd_time = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":5,\"type\":\"cmd\",\"verb\":\"GET\",\"noun\":\"TIME\"}\n";
@@ -231,19 +233,64 @@ static void test_unsupported_and_deferred_commands(void)
     TEST_ASSERT(ok, "Processed unsupported command");
     TEST_ASSERT(strstr((char *)resp.buffer, "\"status\":\"unsupported\"") != NULL, "Status unsupported");
 
-    /* 3. DISPLAY DISTANCE (Deferred to M9: HC-SR04 not installed) */
-    const char *cmd_dist = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":22,\"type\":\"cmd\",\"verb\":\"DISPLAY\",\"noun\":\"DISTANCE\"}\n";
-    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_dist, strlen(cmd_dist), &resp);
-    TEST_ASSERT(ok, "Processed deferred command");
+    /* 3. ACTUATE RELAY (Unsupported: unmounted relay K1) */
+    const char *cmd_relay = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":22,\"type\":\"cmd\",\"verb\":\"ACTUATE\",\"noun\":\"RELAY\"}\n";
+    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_relay, strlen(cmd_relay), &resp);
+    TEST_ASSERT(ok, "Processed unsupported command");
     TEST_ASSERT(strstr((char *)resp.buffer, "\"status\":\"unsupported\"") != NULL, "Status unsupported");
 
-    /* 4. RUN STRESS_TEST (Unsupported in normal firmware) */
-    const char *cmd_stress = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":23,\"type\":\"cmd\",\"verb\":\"RUN\",\"noun\":\"STRESS_TEST\"}\n";
-    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_stress, strlen(cmd_stress), &resp);
+    /* 4. ACTUATE SERVO (Unsupported: unmounted servo on GPIO33) */
+    const char *cmd_servo = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":23,\"type\":\"cmd\",\"verb\":\"ACTUATE\",\"noun\":\"SERVO\"}\n";
+    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_servo, strlen(cmd_servo), &resp);
+    TEST_ASSERT(ok, "Processed unsupported command");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"status\":\"unsupported\"") != NULL, "Status unsupported");
+
+    /* 5. ACTUATE MOTOR (Unsupported: unmounted L293D DC motors) */
+    const char *cmd_motor = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":24,\"type\":\"cmd\",\"verb\":\"ACTUATE\",\"noun\":\"MOTOR\"}\n";
+    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_motor, strlen(cmd_motor), &resp);
     TEST_ASSERT(ok, "Processed unsupported command");
     TEST_ASSERT(strstr((char *)resp.buffer, "\"status\":\"unsupported\"") != NULL, "Status unsupported");
 
     printf("  [PASS] Unsupported and deferred commands rejected safely with code 3\n");
+}
+
+/* Test: Capabilities reporting and non-rebooting RESET FAULTS */
+static void test_capabilities_and_fault_reset(void)
+{
+    printf("  [TEST] GET CAPABILITIES and non-rebooting RESET FAULTS...\n");
+
+    nexus_executive_t exec;
+    nexus_executive_init(&exec, 100);
+
+    nexus_sensor_registry_t sensors;
+    nexus_sensor_registry_init(&sensors);
+    nexus_sensor_register(&sensors, NEXUS_SENSOR_ID_LDR, "ldr", NEXUS_SENSOR_TYPE_LDR, 34, 100);
+    nexus_sensor_record_error(&sensors, NEXUS_SENSOR_ID_LDR, false);
+
+    nexus_command_dispatcher_t disp;
+    nexus_command_dispatcher_init(&disp, &exec, &sensors, NULL);
+
+    nexus_envelope_t resp;
+
+    /* 1. GET CAPABILITIES */
+    const char *cmd_cap = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":40,\"type\":\"cmd\",\"verb\":\"GET\",\"noun\":\"CAPABILITIES\"}\n";
+    bool ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_cap, strlen(cmd_cap), &resp);
+    TEST_ASSERT(ok, "GET CAPABILITIES executed");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"mounted\":\"ldr,dht,cd4051,moc,dist,led,buz\"") != NULL, "Truthful mounted hardware");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"unmounted\":\"touch,vib,snd,servo,lm35,relay\"") != NULL, "Truthful unmounted hardware");
+
+    /* 2. RESET FAULTS (must clear fault count without rebooting) */
+    const char *cmd_rf = "{\"ver\":1,\"dev\":\"nexus_esp32\",\"seq\":41,\"type\":\"cmd\",\"verb\":\"RESET\",\"noun\":\"FAULTS\"}\n";
+    ok = nexus_command_dispatcher_process(&disp, NEXUS_TRANSPORT_TYPE_SERIAL, (const uint8_t *)cmd_rf, strlen(cmd_rf), &resp);
+    TEST_ASSERT(ok, "RESET FAULTS executed");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"status\":\"completed\"") != NULL, "Status completed");
+    TEST_ASSERT(strstr((char *)resp.buffer, "\"faults_cleared\":true") != NULL, "Faults cleared");
+
+    /* Verify sensor error count was reset */
+    nexus_sensor_descriptor_t *d = nexus_sensor_get(&sensors, NEXUS_SENSOR_ID_LDR);
+    TEST_ASSERT(d != NULL && d->error_count == 0, "Sensor error count cleared by RESET FAULTS");
+
+    printf("  [PASS] GET CAPABILITIES and non-rebooting RESET FAULTS verified\n");
 }
 
 /* Test 5: Rejection of Malformed, Oversized, and Invalid Inputs */
@@ -411,6 +458,7 @@ int main(void)
     test_supported_commands_execution();
     test_display_and_diagnostics_handlers();
     test_unsupported_and_deferred_commands();
+    test_capabilities_and_fault_reset();
     test_malformed_and_invalid_inputs();
     test_open_command_generation_and_bounds();
     test_connection_manager_rx_callback_integration();

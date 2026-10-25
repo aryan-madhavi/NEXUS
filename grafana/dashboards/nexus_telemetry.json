@@ -122,7 +122,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"temp\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"temp\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"temp\")",
           "refId": "A"
         }
       ],
@@ -219,7 +219,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"hum\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"hum\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"hum\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"hum\")",
           "refId": "A"
         }
       ],
@@ -297,7 +297,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"dht_valid\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> last()",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"dht_valid\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> last()\n  |> map(fn: (r) => ({ r with _value: if r._value then 1 else 0 }))",
           "refId": "A"
         }
       ],
@@ -356,7 +356,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\" or r[\"_measurement\"] == \"nexus_hb\")\n  |> filter(fn: (r) => r[\"_field\"] == \"uptime_ms\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> last()",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\" or r[\"_measurement\"] == \"nexus_hb\")\n  |> filter(fn: (r) => r[\"_field\"] == \"uptime_ms\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> last()",
           "refId": "A"
         }
       ],
@@ -457,7 +457,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"ldr_raw\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"ldr_raw\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"ldr_raw\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"ldr_raw\")",
           "refId": "A"
         }
       ],
@@ -469,7 +469,7 @@
         "type": "influxdb",
         "uid": "nexus_influxdb_flux"
       },
-      "description": "Raw 12-bit ADC value from analog diagnostic input channel X0 (0\u20134095).",
+      "description": "Infrared photodetector / obstacle sensor connected via CD4051 analog multiplexer channel X0 (ADC1_CH4 / GPIO32). Raw 12-bit ADC counts (0–4095). Baseline ambient ~0–50 counts, object reflection peaks up to ~2800 counts.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -479,7 +479,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "X0 Raw ADC Counts",
+            "axisLabel": "IR Raw ADC Counts",
             "axisPlacement": "auto",
             "fillOpacity": 15,
             "gradientMode": "opacity",
@@ -501,8 +501,7 @@
             }
           },
           "mappings": [],
-          "max": 4095,
-          "min": 0,
+          "softMin": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -546,11 +545,11 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"x0_raw\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"x0_raw\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"x0_raw\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"x0_raw\")",
           "refId": "A"
         }
       ],
-      "title": "X0 Raw Reading (Diagnostic ADC)",
+      "title": "Infrared Sensor IR-1 (CD4051 X0 Raw ADC)",
       "type": "timeseries"
     },
     {
@@ -652,7 +651,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_hb\")\n  |> filter(fn: (r) => r[\"_field\"] == \"free_heap\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"free_heap\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_hb\")\n  |> filter(fn: (r) => r[\"_field\"] == \"free_heap\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"free_heap\")",
           "refId": "A"
         }
       ],
@@ -664,7 +663,7 @@
         "type": "influxdb",
         "uid": "nexus_influxdb_flux"
       },
-      "description": "Executive dispatch loop execution tick count reported per heartbeat interval.",
+      "description": "Operational executive dispatch rate in Hertz computed from tick derivatives (nominal: 10-20 Hz)",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -705,7 +704,9 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "Hz",
+          "min": 0,
+          "max": 25
         },
         "overrides": []
       },
@@ -738,11 +739,11 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_hb\")\n  |> filter(fn: (r) => r[\"_field\"] == \"exec_ticks\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> yield(name: \"exec_ticks\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_hb\")\n  |> filter(fn: (r) => r[\"_field\"] == \"exec_ticks\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"exec_loop_freq\")",
           "refId": "A"
         }
       ],
-      "title": "Executive Loop Ticks",
+      "title": "Executive Loop Frequency",
       "type": "timeseries"
     },
     {
@@ -754,7 +755,7 @@
         "y": 27
       },
       "id": 103,
-      "title": "Extended Sensor Suite (M9 / M10 Qualification)",
+      "title": "Auxiliary Sensors & Optical Telemetry",
       "type": "row"
     },
     {
@@ -762,7 +763,7 @@
         "type": "influxdb",
         "uid": "nexus_influxdb_flux"
       },
-      "description": "Raw 12-bit ADC value from Hall-effect sensor IC2 on multiplexer channel X1 (0\u20134095, quiescent baseline ~2048 counts).",
+      "description": "Hall effect IC2 module is not physically installed on this hardware build",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -847,11 +848,11 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"x1_raw\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"x1_raw\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"x1_raw\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"x1_raw\")",
           "refId": "A"
         }
       ],
-      "title": "Hall Effect IC2 (CD4051 X1 Raw ADC)",
+      "title": "Hall Magnetic Sensor (Not Installed)",
       "type": "timeseries"
     },
     {
@@ -925,7 +926,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"slot_state\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^$/)\n  |> last()",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"slot_state\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> last()",
           "refId": "A"
         }
       ],
@@ -1022,7 +1023,7 @@
             "type": "influxdb",
             "uid": "nexus_influxdb_flux"
           },
-          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"dist_cm\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"dist_cm\")",
+          "query": "from(bucket: \"nexus_telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"nexus_telem\")\n  |> filter(fn: (r) => r[\"_field\"] == \"dist_cm\")\n  |> filter(fn: (r) => r[\"dev\"] =~ /^${dev:regex}$/)\n  |> filter(fn: (r) => r[\"transport\"] =~ /^${transport:regex}$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> yield(name: \"dist_cm\")",
           "refId": "A"
         }
       ],
@@ -1058,10 +1059,44 @@
         "options": [],
         "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"nexus_telemetry\", tag: \"dev\")",
         "refresh": 1,
-        "regex": "",
+        "regex": "/^(nexus_esp32)$/",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "description": "Filter telemetry by transport provenance (USB Serial, MQTT Wi-Fi, or All)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Transport",
+        "multi": true,
+        "name": "transport",
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "USB Serial",
+            "value": "serial"
+          },
+          {
+            "selected": false,
+            "text": "MQTT / Wi-Fi",
+            "value": "mqtt"
+          }
+        ],
+        "query": "serial, mqtt",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
       }
     ]
   },

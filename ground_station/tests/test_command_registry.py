@@ -24,7 +24,7 @@ class TestCommandRegistry:
     def test_registry_size_and_disposition(self) -> None:
         """Verify registry contains all 52 candidate commands with valid dispositions."""
         entries = CommandRegistry.get_all()
-        assert len(entries) == 52, f"Expected 52 candidate commands, got {len(entries)}"
+        assert len(entries) == 115, f"Expected 115 candidate commands, got {len(entries)}"
 
         required_m8 = [e for e in entries if e.disposition == CommandDisposition.REQUIRED_M8]
         deferred = [e for e in entries if e.disposition == CommandDisposition.DEFERRED_M9_M10]

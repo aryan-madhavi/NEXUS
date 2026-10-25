@@ -216,6 +216,16 @@ class SerialTransportAdapter(TransportAdapter):
                 except Exception:
                     pass
             ser.open()
+            if hasattr(ser, "dtr"):
+                try:
+                    ser.dtr = False
+                except Exception:
+                    pass
+            if hasattr(ser, "rts"):
+                try:
+                    ser.rts = False
+                except Exception:
+                    pass
             # Clear HUPCL if termios is available to prevent hangup pulse on close
             try:
                 import termios
@@ -386,6 +396,37 @@ class SerialTransportAdapter(TransportAdapter):
                 port.close()
             except Exception:
                 pass
+
+    def send_frame(self, data: Union[str, bytes]) -> bool:
+        """Thread-safely send a newline-terminated frame over serial to ESP32."""
+        with self._lock:
+            port = self._serial_port
+            connected = self._is_connected
+        if not connected or port is None:
+            logger.warning("Cannot send frame: serial transport is not connected")
+            return False
+
+        if isinstance(data, str):
+            if not data.endswith("\n"):
+                data = data + "\n"
+            raw = data.encode("utf-8")
+        else:
+            raw = data if data.endswith(b"\n") else data + b"\n"
+
+        if len(raw) > self._config.max_frame_bytes:
+            logger.error("Cannot send frame: payload length %d exceeds max %d", len(raw), self._config.max_frame_bytes)
+            return False
+
+        try:
+            port.write(raw)
+            if hasattr(port, "flush"):
+                port.flush()
+            return True
+        except Exception as err:
+            logger.error("Failed to write frame to serial port: %s", err)
+            with self._lock:
+                self._io_errors += 1
+            return False
 
     def get_stats(self) -> SerialStats:
         """Return a snapshot of serial adapter telemetry."""

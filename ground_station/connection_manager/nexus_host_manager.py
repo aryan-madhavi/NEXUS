@@ -154,6 +154,11 @@ class NexusHostManager:
         if should_start:
             adapter.start(self.handle_raw_message)
 
+    def register_adapter(self, name_or_adapter: Any, adapter: Optional[TransportAdapter] = None) -> None:
+        """Backwards-compatible adapter registration supporting both (adapter) and (name, adapter)."""
+        target = adapter if adapter is not None else name_or_adapter
+        self.register_transport(target)
+
     def unregister_transport(self, name: str) -> None:
         """Stop and remove a registered transport adapter."""
         adapter: Optional[TransportAdapter] = None
@@ -162,6 +167,10 @@ class NexusHostManager:
 
         if adapter and adapter.is_running:
             adapter.stop()
+
+    def unregister_adapter(self, name: str) -> None:
+        """Backwards-compatible adapter unregistration."""
+        self.unregister_transport(name)
 
     def get_adapter(self, name: str) -> Optional[TransportAdapter]:
         """Retrieve a registered transport adapter by name."""
@@ -356,6 +365,63 @@ class NexusHostManager:
             return item
         except queue.Empty:
             return None
+
+    def send_command(
+        self,
+        command_payload: Union[str, bytes, Dict[str, Any]],
+        target_device: str = "nexus_esp32",
+        transport_preference: str = "auto",
+    ) -> bool:
+        """Route and send an outbound command envelope to an ESP32 device."""
+        if isinstance(command_payload, dict):
+            import json
+            raw_str = json.dumps(command_payload, separators=(",", ":"))
+        elif isinstance(command_payload, bytes):
+            raw_str = command_payload.decode("utf-8", errors="replace")
+        else:
+            raw_str = str(command_payload)
+
+        with self._lock:
+            adapters = dict(self._adapters)
+
+        # 1. Direct serial preference
+        if transport_preference == "serial":
+            ser = adapters.get("serial")
+            if ser and hasattr(ser, "send_frame"):
+                return bool(ser.send_frame(raw_str))
+            logger.warning("Serial transport preferred but unavailable")
+            return False
+
+        # 2. Direct mqtt preference
+        if transport_preference == "mqtt":
+            mq = adapters.get("mqtt")
+            if mq and hasattr(mq, "publish_command"):
+                return bool(mq.publish_command(f"nexus/{target_device}/cmd", raw_str))
+            logger.warning("MQTT transport preferred but unavailable")
+            return False
+
+        # 3. Auto preference: prefer connected serial, then connected mqtt
+        ser = adapters.get("serial")
+        if ser and getattr(ser, "is_connected", False) and hasattr(ser, "send_frame"):
+            if ser.send_frame(raw_str):
+                return True
+
+        mq = adapters.get("mqtt")
+        if mq and getattr(mq, "is_connected", False) and hasattr(mq, "publish_command"):
+            if mq.publish_command(f"nexus/{target_device}/cmd", raw_str):
+                return True
+
+        # Fallback to any adapter with send capability
+        for name, adp in adapters.items():
+            if hasattr(adp, "send_frame"):
+                if adp.send_frame(raw_str):
+                    return True
+            elif hasattr(adp, "publish_command"):
+                if adp.publish_command(f"nexus/{target_device}/cmd", raw_str):
+                    return True
+
+        logger.warning("No active transport connected to deliver command payload")
+        return False
 
     def get_stats(self) -> HostManagerStats:
         """Return an immutable telemetry snapshot of the connection manager."""

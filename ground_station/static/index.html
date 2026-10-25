@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEXUS Mission Control | EDU_ROBO V14</title>
+  <meta name="description" content="Apollo-inspired environmental monitoring & command control center for NEXUS EDU_ROBO V14">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="nexus-theme">
+  <!-- Top Navigation / Status Ribbon -->
+  <header class="mission-header">
+    <div class="header-left">
+      <div class="mission-insignia">
+        <span class="insignia-symbol">▲</span>
+        <span class="insignia-name">NEXUS</span>
+      </div>
+      <div class="mission-title">
+        <h1>MISSION CONTROL</h1>
+        <span class="sub-platform">EDU_ROBO V14 • ESP32</span>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="status-pill-group">
+        <div id="connection-badge" class="badge badge-offline">
+          <span class="indicator-dot"></span>
+          <span class="badge-text" id="connection-text">CONNECTING</span>
+        </div>
+        <div id="transport-badge" class="badge badge-neutral">
+          <span class="badge-label">ROUTE</span>
+          <span class="badge-text" id="transport-text">SCANNING</span>
+        </div>
+        <div class="transport-selector-badge" style="display: flex; align-items: center; gap: 0.35rem; background: rgba(0,255,255,0.06); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(0,255,255,0.2);">
+          <span style="font-size: 0.7rem; color: #00ffff; font-family: monospace; font-weight: bold;">TRANSPORT:</span>
+          <select id="select-global-transport" class="form-control form-control-sm" style="background: #0d131f; color: #fff; border: 1px solid #1f2f47; font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: 3px; cursor: pointer;">
+            <option value="auto">AUTO (Prefer Active)</option>
+            <option value="serial">USB Serial</option>
+            <option value="mqtt">MQTT / Wi-Fi</option>
+          </select>
+        </div>
+        <div class="badge badge-device">
+          <span class="badge-label">NODE</span>
+          <span class="badge-text" id="device-id-text">nexus_esp32</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="mission-clock">
+        <div class="clock-label">SYSTEM TIME (UTC)</div>
+        <div id="utc-clock" class="clock-value">00:00:00</div>
+      </div>
+      <button id="refresh-all-btn" class="btn btn-icon" title="Refresh Telemetry">⟳</button>
+    </div>
+  </header>
+
+  <!-- Main Grid Dashboard -->
+  <main class="dashboard-container">
+    
+    <!-- Top Stats Bar -->
+    <section class="quick-telemetry-strip">
+      <div class="telemetry-chip">
+        <span class="chip-label">UPTIME</span>
+        <span id="chip-uptime" class="chip-value">--:--:--</span>
+      </div>
+      <div class="telemetry-chip">
+        <span class="chip-label">FREE HEAP</span>
+        <span id="chip-heap" class="chip-value">-- KB</span>
+      </div>
+      <div class="telemetry-chip">
+        <span class="chip-label">QUEUED MSG</span>
+        <span id="chip-queue" class="chip-value">0 / 100</span>
+      </div>
+      <div class="telemetry-chip">
+        <span class="chip-label">COMMANDS SENT</span>
+        <span id="chip-cmds" class="chip-value">0</span>
+      </div>
+      <div class="telemetry-chip">
+        <span class="chip-label">STREAM AGE</span>
+        <span id="chip-age" class="chip-value">--</span>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs for Mobile & Desktop -->
+    <nav class="console-tabs" role="tablist">
+      <button class="tab-btn active" data-tab="tab-telemetry" role="tab" id="btn-tab-telemetry">Telemetry & Sensors</button>
+      <button class="tab-btn" data-tab="tab-command" role="tab" id="btn-tab-command">Command Console</button>
+      <button class="tab-btn" data-tab="tab-hardware" role="tab" id="btn-tab-hardware">Hardware Inventory</button>
+      <button class="tab-btn" data-tab="tab-history" role="tab" id="btn-tab-history">Audit & Logs</button>
+      <button class="tab-btn" data-tab="tab-services" role="tab" id="btn-tab-services">Mission Services</button>
+      <button class="tab-btn" data-tab="tab-reference" role="tab" id="btn-tab-reference">Command & Data Reference</button>
+    </nav>
+
+    <!-- TAB 1: Live Telemetry & Sensors -->
+    <section id="tab-telemetry" class="tab-panel active">
+      <div class="panel-header">
+        <h2>Live Environmental Telemetry</h2>
+        <span class="panel-subtitle">Acquired via serialized FreeRTOS sensor sampling pipeline</span>
+      </div>
+
+      <div class="sensors-grid">
+        <!-- Sensor Card: Temperature -->
+        <article class="sensor-card" id="card-temp">
+          <div class="card-head">
+            <span class="sensor-name">TEMPERATURE</span>
+            <span class="sensor-id">DHT11 • IO19</span>
+          </div>
+          <div class="card-body">
+            <div class="metric-display">
+              <span id="val-temp" class="metric-number">--</span>
+              <span class="metric-unit">°C</span>
+            </div>
+            <div class="metric-meta">
+              <span id="tag-temp-valid" class="tag tag-ok">VALID</span>
+              <span class="nominal-range">Nominal: 15–35°C</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Sensor Card: Humidity -->
+        <article class="sensor-card" id="card-hum">
+          <div class="card-head">
+            <span class="sensor-name">HUMIDITY</span>
+            <span class="sensor-id">DHT11 • IO19</span>
+          </div>
+          <div class="card-body">
+            <div class="metric-display">
+              <span id="val-hum" class="metric-number">--</span>
+              <span class="metric-unit">%</span>
+            </div>
+            <div class="metric-meta">
+              <span id="tag-hum-valid" class="tag tag-ok">VALID</span>
+              <span class="nominal-range">Nominal: 20–80%</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Sensor Card: Light Intensity -->
+        <article class="sensor-card" id="card-ldr">
+          <div class="card-head">
+            <span class="sensor-name">AMBIENT LIGHT</span>
+            <span class="sensor-id">LDR • IO35 ADC1</span>
+          </div>
+          <div class="card-body">
+            <div class="metric-display">
+              <span id="val-ldr" class="metric-number">--</span>
+              <span class="metric-unit">ADC</span>
+            </div>
+            <div class="metric-meta">
+              <span class="tag tag-neutral">ANALOG RAW</span>
+              <span class="nominal-range">0–4095 (Dark→Bright)</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Sensor Card: CD4051 MUX X0 (IR Sensor) -->
+        <article class="sensor-card" id="card-x0">
+          <div class="card-head">
+            <span class="sensor-name">INFRARED SENSOR (IR-1)</span>
+            <span class="sensor-id">CD4051 X0 • IO36</span>
+          </div>
+          <div class="card-body">
+            <div class="metric-display">
+              <span id="val-x0" class="metric-number">--</span>
+              <span class="metric-unit">ADC</span>
+            </div>
+            <div class="metric-meta">
+              <span class="tag tag-ok">INSTALLED</span>
+              <span class="nominal-range">IR Photodetector Raw ADC</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Sensor Card: CD4051 MUX X1 (Hall Effect - Not Installed) -->
+        <article class="sensor-card sensor-card-unmounted" id="card-x1" style="opacity: 0.75; border-color: rgba(255, 170, 0, 0.3);">
+          <div class="card-head">
+            <span class="sensor-name">MAGNETIC SENSOR (HALL)</span>
+            <span class="sensor-id">CD4051 X1 • IO36</span>
+          </div>
+          <div class="card-body">
+            <div class="metric-display">
+              <span id="val-x1" class="metric-status text-warning" style="color: #ffaa00; font-size: 1.1rem; letter-spacing: 0.05em;">NOT INSTALLED</span>
+            </div>
+            <div class="metric-meta">
+              <span class="tag tag-warn">NOT INSTALLED</span>
+              <span class="nominal-range">Hall IC2 Not Mounted</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Sensor Card: MOC7811 Slot Optocoupler -->
+        <article class="sensor-card" id="card-slot">
+          <div class="card-head">
+            <span class="sensor-name">OPTICAL SLOT BEAM</span>
+            <span class="sensor-id">MOC7811 • IO34</span>
+          </div>
+          <div class="card-body">
+            <div class="metric-display">
+              <span id="val-slot" class="metric-status">UNBLOCKED</span>
+            </div>
+            <div class="metric-meta">
+              <span id="tag-slot-state" class="tag tag-ok">BEAM CLEAR</span>
+              <span class="nominal-range">0=Clear, 1=Blocked</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Sensor Card: HC-SR04 Ultrasonic Distance -->
+        <article class="sensor-card" id="card-dist">
+          <div class="card-head">
+            <span class="sensor-name">ULTRASONIC DISTANCE</span>
+            <span class="sensor-id">HC-SR04 • IO25/26</span>
+          </div>
+          <div class="card-body">
+            <div class="metric-display">
+              <span id="val-dist" class="metric-number">--</span>
+              <span class="metric-unit">cm</span>
+            </div>
+            <div class="metric-meta">
+              <span id="tag-dist-state" class="tag tag-neutral">RANGE</span>
+              <span class="nominal-range">Range: 2–400 cm</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Quick Actuation Card -->
+        <article class="sensor-card actuation-quick-card">
+          <div class="card-head">
+            <span class="sensor-name">MOUNTED ACTUATORS</span>
+            <span class="sensor-id">LEDs 1-4 • BUZZER</span>
+          </div>
+          <div class="card-body quick-actuation-body" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <div class="actuator-row" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Buzzer (IO15):</span>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-action" onclick="window.NexusApp.quickBuzzer(1, 200)">200ms</button>
+                <button class="btn btn-sm btn-action" onclick="window.NexusApp.quickBuzzer(1, 500)">500ms</button>
+                <button class="btn btn-sm btn-outline" onclick="window.NexusApp.quickBuzzer(0, 0)">Off</button>
+              </div>
+            </div>
+            <div class="actuator-row" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>LED 1 (IO27):</span>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-action" onclick="window.NexusApp.quickLed(1, 1)">ON</button>
+                <button class="btn btn-sm btn-outline" onclick="window.NexusApp.quickLed(1, 0)">OFF</button>
+              </div>
+            </div>
+            <div class="actuator-row" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>LED 2 (IO14):</span>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-action" onclick="window.NexusApp.quickLed(2, 1)">ON</button>
+                <button class="btn btn-sm btn-outline" onclick="window.NexusApp.quickLed(2, 0)">OFF</button>
+              </div>
+            </div>
+            <div class="actuator-row" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>LED 3 (IO12):</span>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-action" onclick="window.NexusApp.quickLed(3, 1)">ON</button>
+                <button class="btn btn-sm btn-outline" onclick="window.NexusApp.quickLed(3, 0)">OFF</button>
+              </div>
+            </div>
+            <div class="actuator-row" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>LED 4 (IO13):</span>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-action" onclick="window.NexusApp.quickLed(4, 1)">ON</button>
+                <button class="btn btn-sm btn-outline" onclick="window.NexusApp.quickLed(4, 0)">OFF</button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- TAB 2: Canonical Command Console -->
+    <section id="tab-command" class="tab-panel">
+      <div class="panel-header">
+        <h2>Canonical Command Dispatcher</h2>
+        <span class="panel-subtitle">Driven dynamically by the authoritative 115-command NEXUS registry</span>
+      </div>
+
+      <div class="command-grid-layout">
+        <!-- Command Builder Form -->
+        <div class="command-builder-card">
+          <h3 class="card-title">1. Command Specification</h3>
+
+          <div class="form-group">
+            <label for="select-verb">VERB (Operation Category):</label>
+            <select id="select-verb" class="form-control">
+              <option value="">-- Select VERB --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="select-noun">NOUN (Target Subject):</label>
+            <select id="select-noun" class="form-control" disabled>
+              <option value="">-- Select VERB first --</option>
+            </select>
+          </div>
+
+          <div class="command-meta-bar" id="command-meta-bar" style="display: none;">
+            <div class="meta-item"><span class="meta-label">ID:</span> <span id="meta-cmd-id" class="code-pill">0x0000</span></div>
+            <div class="meta-item"><span class="meta-label">TARGET:</span> <span id="meta-destination" class="code-pill">FIRMWARE</span></div>
+            <div class="meta-item"><span class="meta-label">DISPOSITION:</span> <span id="meta-disposition" class="code-pill">REQUIRED</span></div>
+            <div class="meta-item"><span class="meta-label">SUPPORTED:</span> <span id="meta-supported" class="tag tag-ok">YES</span></div>
+          </div>
+
+          <div id="command-description" class="command-description-box" style="display: none;">
+            <!-- Description text injected dynamically -->
+          </div>
+
+          <!-- Dynamic Parameters Container -->
+          <div id="parameters-container" class="parameters-section" style="display: none;">
+            <h4 class="sub-heading">Command Parameters</h4>
+            <div id="dynamic-fields-area"></div>
+          </div>
+
+          <!-- Transport preference & dispatch settings -->
+          <div class="transport-preference-row">
+            <label for="select-transport-route">Preferred Route:</label>
+            <select id="select-transport-route" class="form-control form-control-sm">
+              <option value="auto">AUTO (Prefer Active Transport)</option>
+              <option value="serial">USB Serial (/dev/ttyUSB0)</option>
+              <option value="mqtt">MQTT / Wi-Fi (Broker)</option>
+            </select>
+          </div>
+
+          <!-- Transmit Action Button -->
+          <div class="action-submit-area">
+            <button id="btn-dispatch-cmd" class="btn btn-primary btn-block" disabled>
+              <span class="btn-text">TRANSMIT COMMAND</span>
+            </button>
+          </div>
+
+          <!-- Automated Full UI Command Audit Controls -->
+          <div class="audit-runner-box" style="margin-top: 1rem; padding: 0.75rem; background: rgba(0, 210, 255, 0.05); border: 1px dashed rgba(0, 210, 255, 0.3); border-radius: 4px;">
+            <div style="font-size: 0.75rem; font-weight: bold; color: #00d2ff; letter-spacing: 0.05em; margin-bottom: 0.5rem;">EXHAUSTIVE 115-COMMAND MATRIX AUDIT</div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button id="btn-run-serial-audit" class="btn btn-sm btn-outline" style="flex: 1;" onclick="window.NexusApp.runCommandMatrixAudit({route:'serial'})">Audit USB Serial (115)</button>
+              <button id="btn-run-mqtt-audit" class="btn btn-sm btn-outline" style="flex: 1;" onclick="window.NexusApp.runCommandMatrixAudit({route:'mqtt'})">Audit MQTT (115)</button>
+            </div>
+            <div id="audit-progress-status" style="font-size: 0.75rem; color: #8ba2b5; margin-top: 0.5rem; display: none;">Ready</div>
+          </div>
+        </div>
+
+        <!-- Wire Preview & Execution Response Display -->
+        <div class="command-preview-card">
+          <h3 class="card-title">2. Outbound Wire Envelope Preview</h3>
+          <pre id="wire-preview" class="code-view json-preview">{\n  /* Select a command to preview wire envelope */\n}</pre>
+
+          <h3 class="card-title" style="margin-top: 1.25rem;">3. Response & Execution Telemetry</h3>
+          <div id="response-status-banner" class="status-banner banner-idle">
+            <span class="status-icon">⚪</span>
+            <span id="banner-text">Awaiting operator transmission...</span>
+          </div>
+
+          <pre id="response-preview" class="code-view json-response">{\n  /* Response envelope from target will appear here */\n}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Hardware Inventory & Authority -->
+    <section id="tab-hardware" class="tab-panel">
+      <div class="panel-header">
+        <h2>EDU_ROBO V14 Hardware Availability Profile</h2>
+        <span class="panel-subtitle">Authoritative hardware mapping: truthful inventory of mounted vs unmounted modules</span>
+      </div>
+
+      <div class="hardware-split-grid">
+        <!-- Mounted Hardware -->
+        <div class="hardware-column">
+          <h3 class="inventory-heading mounted-heading">✔ Mounted & Verified Modules</h3>
+          <div class="table-responsive">
+            <table class="nexus-table" id="table-mounted-hw">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Component Name</th>
+                  <th>GPIO / Pin</th>
+                  <th>Bus Protocol</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-mounted-hw">
+                <!-- Dynamically populated from /api/status -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Unmounted Hardware -->
+        <div class="hardware-column">
+          <h3 class="inventory-heading unmounted-heading">✖ Unmounted Modules (Truthful Rejection)</h3>
+          <p class="unmounted-notice">Commands addressing unmounted hardware return documented rejection code 3 (unsupported) rather than fabricated telemetry.</p>
+          <div class="table-responsive">
+            <table class="nexus-table" id="table-unmounted-hw">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Component Name</th>
+                  <th>GPIO</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-unmounted-hw">
+                <!-- Dynamically populated from /api/status -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Audit Trail & Command History -->
+    <section id="tab-history" class="tab-panel">
+      <div class="panel-header">
+        <h2>Command & Response Audit Trail</h2>
+        <span class="panel-subtitle">Bounded chronological record of operator transmissions and firmware responses</span>
+        <div class="header-actions">
+          <button class="btn btn-sm btn-outline" id="btn-export-json">Export JSON</button>
+          <button class="btn btn-sm btn-outline" id="btn-export-csv">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="nexus-table" id="table-audit-history">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Seq</th>
+              <th>Route</th>
+              <th>Type</th>
+              <th>VERB</th>
+              <th>NOUN</th>
+              <th>Status</th>
+              <th>Code</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-audit-history">
+            <tr><td colspan="9" class="text-center text-muted">No commands dispatched during this session</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 5: Mission Auxiliary Services -->
+    <section id="tab-services" class="tab-panel">
+      <div class="panel-header">
+        <h2>Mission Auxiliary Services & Tooling</h2>
+        <span class="panel-subtitle">External visualization, time-series storage, and grounded AI assistant endpoints</span>
+      </div>
+
+      <div class="services-cards-grid" id="services-cards-container">
+        <!-- Rendered dynamically from /api/services -->
+      </div>
+    </section>
+
+    <!-- TAB 6: Command & Data Reference (Help) -->
+    <section id="tab-reference" class="tab-panel">
+      <div class="panel-header">
+        <h2>Command & Data Reference Manual</h2>
+        <span class="panel-subtitle">Canonical command catalog, protocol enums, sensor mappings, and runtime entity discovery</span>
+      </div>
+
+      <!-- Reference Sub-Navigation -->
+      <div class="ref-subnav">
+        <button class="ref-subtab-btn active" data-ref-subtab="ref-panel-catalog" id="btn-subtab-catalog">1. Command Catalog (115)</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-parameters" id="btn-subtab-parameters">2. Parameter Dictionary (27)</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-sensors" id="btn-subtab-sensors">3. Sensor & Telemetry Dictionary</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-events" id="btn-subtab-events">4. Event, Fault & Warning Dictionaries</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-actuators" id="btn-subtab-actuators">5. Actuators & Peripherals</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-workflows" id="btn-subtab-workflows">6. Runtime ID Discovery & Workflows</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-protocol" id="btn-subtab-protocol">7. Protocol & Status Codes</button>
+      </div>
+
+      <!-- SUBPANEL 1: Command Catalog (115 Commands with Expandable Detail Drawers) -->
+      <div id="ref-panel-catalog" class="ref-subpanel active">
+        <!-- Filter / Search Bar -->
+        <div class="reference-filter-bar" style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+          <input type="text" id="ref-search-input" placeholder="Search commands by verb, noun, parameter, ID (hex/dec), or description..." class="form-control" style="flex: 1; min-width: 280px; background: #0d131f; color: #fff; border: 1px solid #1f2f47; padding: 0.45rem 0.75rem; border-radius: 4px; font-size: 0.8rem;">
+          <div class="ref-filter-btns" style="display: flex; gap: 0.35rem;">
+            <button class="btn btn-sm btn-outline active" data-ref-filter="all" id="ref-filter-all">All Commands</button>
+            <button class="btn btn-sm btn-outline" data-ref-filter="FIRMWARE" id="ref-filter-firmware">Firmware (ESP32)</button>
+            <button class="btn btn-sm btn-outline" data-ref-filter="GROUND_STATION" id="ref-filter-ground">Ground Station</button>
+            <button class="btn btn-sm btn-outline" data-ref-filter="TEST_HARNESS" id="ref-filter-harness">Test Harness</button>
+          </div>
+          <span id="ref-count-badge" class="badge badge-device" style="font-size: 0.75rem;">115 Commands</span>
+        </div>
+
+        <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.75rem;">💡 Click any command row to expand its full parameter schema, valid ranges, runnable example payload, expected response, and error codes.</p>
+
+        <!-- Reference Catalog Table -->
+        <div class="table-container" style="overflow-x: auto; max-height: 650px; border: 1px solid #1f2f47; border-radius: 6px;">
+          <table class="data-table" id="table-cmd-reference">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;"></th>
+                <th style="width: 160px;">Command (VERB NOUN)</th>
+                <th style="width: 120px;">ID (Hex / Dec)</th>
+                <th style="width: 110px;">Target</th>
+                <th style="width: 130px;">Transports</th>
+                <th style="width: 240px;">Parameters & Types</th>
+                <th style="width: 100px;">Safety</th>
+                <th>Description & Implementation Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-cmd-reference">
+              <tr><td colspan="8" class="text-center text-muted">Loading canonical command registry...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUBPANEL 2: Parameter Dictionary (27 Parameters across 48 Instances) -->
+      <div id="ref-panel-parameters" class="ref-subpanel">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 style="color: #00ffff; font-size: 1rem;">Command Parameter Value Dictionary & Semantics</h3>
+          <p style="font-size: 0.8rem; color: #a0aec0;">Comprehensive specification of all 27 parameter keys across all 115 registered commands: data types, value semantics, allowed ranges, units, defaults, sentinels, null/omission rules, and verified runtime discovery workflows.</p>
+        </div>
+
+        <!-- Filter / Search Bar for Parameters -->
+        <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+          <input type="text" id="param-search-input" placeholder="Search parameters by key, semantic class, unit, or command..." class="form-control" style="flex: 1; min-width: 280px; background: #0d131f; color: #fff; border: 1px solid #1f2f47; padding: 0.45rem 0.75rem; border-radius: 4px; font-size: 0.8rem;">
+          <span id="param-count-badge" class="badge badge-device" style="font-size: 0.75rem;">27 Parameters</span>
+        </div>
+
+        <div class="table-container" style="overflow-x: auto; max-height: 650px; border: 1px solid #1f2f47; border-radius: 6px; margin-bottom: 1.5rem;">
+          <table class="data-table" id="table-param-dictionary">
+            <thead>
+              <tr>
+                <th style="width: 130px;">Parameter Key</th>
+                <th style="width: 80px;">Type</th>
+                <th style="width: 150px;">Value Semantics</th>
+                <th style="width: 220px;">Allowed Values / Range & Units</th>
+                <th style="width: 120px;">Default & Sentinels</th>
+                <th style="width: 200px;">Used in Commands</th>
+                <th>Discovery Workflow & Meaning</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-param-dictionary">
+              <tr><td colspan="7" class="text-center text-muted">Loading parameter dictionary...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUBPANEL 2: Sensor & Telemetry Dictionary -->
+      <div id="ref-panel-sensors" class="ref-subpanel">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 style="color: #00ffff; font-size: 1rem;">Sensor Identifiers & Telemetry Field Mappings</h3>
+          <p style="font-size: 0.8rem; color: #a0aec0;">Comprehensive hardware pinout, data types, units, telemetry field names, and AI tool mapping for all EDU_ROBO V14 sensors.</p>
+        </div>
+
+        <div class="table-container" style="overflow-x: auto; border: 1px solid #1f2f47; border-radius: 6px; margin-bottom: 1.5rem;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Sensor ID</th>
+                <th>Name & Description</th>
+                <th>Physical Pin / Bus</th>
+                <th>Produced Fields</th>
+                <th>Units & Valid Range</th>
+                <th>Status</th>
+                <th>Accepted Commands & AI Tools</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-mono text-cyan"><strong>ldr</strong> (1)</td>
+                <td>Light Dependent Resistor (ambient illumination)</td>
+                <td class="font-mono">GPIO 35 (ADC1_CH7)</td>
+                <td class="font-mono"><code>ldr</code> (uint16)</td>
+                <td>0 - 4095 ADC counts</td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+                <td><code>CALIBRATE SENSOR</code>, <code>get_latest_telemetry</code>, <code>get_signal_statistics</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>dht11</strong> (2, 3)</td>
+                <td>DHT11 Digital Temp & Humidity Sensor</td>
+                <td class="font-mono">GPIO 19 (Single-Wire)</td>
+                <td class="font-mono"><code>temp</code>, <code>hum</code>, <code>dht_valid</code></td>
+                <td>0 - 50 °C (±2°C), 20 - 90 % RH (±5%)</td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+                <td><code>START/STOP SENSORS</code>, <code>get_latest_telemetry</code>, <code>get_telemetry_freshness</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>cd4051_x0</strong> (4)</td>
+                <td>HW-870 Flame / IR Detector via CD4051 Mux X0</td>
+                <td class="font-mono">GPIO 36 (ADC1_CH0 via Mux X0)</td>
+                <td class="font-mono"><code>x0</code> (uint16)</td>
+                <td>0 - 4095 ADC counts (raw IR/flame)</td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+                <td><code>SET SENSOR_ENABLE</code>, <code>get_signal_statistics</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>moc7811</strong> (6)</td>
+                <td>MOC7811 Optical Slot Sensor (RPM / encoder)</td>
+                <td class="font-mono">GPIO 34 (Digital Input)</td>
+                <td class="font-mono"><code>slot</code> (uint32)</td>
+                <td>Non-negative transition count</td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+                <td><code>RESET SENSOR_STATE</code>, <code>get_latest_telemetry</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>hcsr04</strong> (7)</td>
+                <td>HC-SR04 Ultrasonic Distance Sensor</td>
+                <td class="font-mono">Trig: GPIO 25, Echo: GPIO 26</td>
+                <td class="font-mono"><code>dist</code> (float)</td>
+                <td>2.0 - 400.0 cm (±3mm)</td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+                <td><code>ASK SENSOR</code>, <code>get_signal_statistics</code>, <code>get_signal_trend</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-muted">cd4051_x1 (5)</td>
+                <td>Hall Magnetic Sensor IC2 via Mux X1</td>
+                <td class="font-mono">GPIO 36 (Mux X1)</td>
+                <td class="font-mono"><code>x1</code></td>
+                <td>N/A</td>
+                <td><span class="tag tag-neutral">UNMOUNTED</span></td>
+                <td>Not physically installed on EDU_ROBO PCB</td>
+              </tr>
+              <tr>
+                <td class="font-mono text-muted">touch</td>
+                <td>Capacitive Touch Module</td>
+                <td class="font-mono">GPIO 18</td>
+                <td class="font-mono"><code>touch</code></td>
+                <td>N/A</td>
+                <td><span class="tag tag-neutral">UNMOUNTED</span></td>
+                <td>Unmounted peripheral on EDU_ROBO V14</td>
+              </tr>
+              <tr>
+                <td class="font-mono text-muted">vibration</td>
+                <td>Vibration Shock Sensor</td>
+                <td class="font-mono">GPIO 23</td>
+                <td class="font-mono"><code>vib</code></td>
+                <td>N/A</td>
+                <td><span class="tag tag-neutral">UNMOUNTED</span></td>
+                <td>Unmounted peripheral on EDU_ROBO V14</td>
+              </tr>
+              <tr>
+                <td class="font-mono text-muted">lm35</td>
+                <td>LM35 Analog Precision Temperature</td>
+                <td class="font-mono">GPIO 39</td>
+                <td class="font-mono"><code>lm35_temp</code></td>
+                <td>N/A</td>
+                <td><span class="tag tag-neutral">UNMOUNTED</span></td>
+                <td>Unmounted peripheral on EDU_ROBO V14</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUBPANEL 3: Event, Fault & Warning Dictionaries -->
+      <div id="ref-panel-events" class="ref-subpanel">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 style="color: #00ffff; font-size: 1rem;">Firmware Event Queue & Operational Fault Dictionaries</h3>
+          <p style="font-size: 0.8rem; color: #a0aec0;">Authoritative enumeration of all event types defined in <code>nexus_event_queue.h</code> and ground station monitoring rules in <code>ground_station/monitoring</code>.</p>
+        </div>
+
+        <h4 style="color: #00ffff; font-size: 0.85rem; margin-bottom: 0.5rem; letter-spacing: 0.05em;">FIRMWARE EVENT TYPES (nexus_event_queue.h)</h4>
+        <div class="table-container" style="overflow-x: auto; border: 1px solid #1f2f47; border-radius: 6px; margin-bottom: 1.5rem;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event Type ID</th>
+                <th>Hex Code</th>
+                <th>Canonical Name</th>
+                <th>Severity</th>
+                <th>Source Subsystem</th>
+                <th>Trigger Condition</th>
+                <th>Payload (int32) Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="font-mono">1</td><td class="font-mono">0x01</td><td><strong>NEXUS_EVENT_TYPE_SYSTEM_BOOT</strong></td><td><span class="tag tag-info">INFO</span></td><td>Firmware Executive</td><td>Cold boot or CPU reset</td><td>Reset reason code</td></tr>
+              <tr><td class="font-mono">2</td><td class="font-mono">0x02</td><td><strong>NEXUS_EVENT_TYPE_JOB_STARTED</strong></td><td><span class="tag tag-neutral">DEBUG</span></td><td>Job Scheduler</td><td>Job popped from ready queue and dispatched</td><td>Dispatched <code>job_id</code></td></tr>
+              <tr><td class="font-mono">3</td><td class="font-mono">0x03</td><td><strong>NEXUS_EVENT_TYPE_JOB_COMPLETED</strong></td><td><span class="tag tag-neutral">DEBUG</span></td><td>Job Scheduler</td><td>Job callback finished with success</td><td>Execution duration (µs)</td></tr>
+              <tr><td class="font-mono">4</td><td class="font-mono">0x04</td><td><strong>NEXUS_EVENT_TYPE_JOB_FAILED</strong></td><td><span class="tag tag-error">ERROR</span></td><td>Job Scheduler</td><td>Job callback returned false or faulted</td><td>Failed <code>job_id</code></td></tr>
+              <tr><td class="font-mono">5</td><td class="font-mono">0x05</td><td><strong>NEXUS_EVENT_TYPE_DEADLINE_MISS</strong></td><td><span class="tag tag-warn">WARN</span></td><td>Job Scheduler</td><td>Job duration exceeded allocated budget</td><td>Overshoot duration (µs)</td></tr>
+              <tr><td class="font-mono">6</td><td class="font-mono">0x06</td><td><strong>NEXUS_EVENT_TYPE_QUEUE_OVERFLOW</strong></td><td><span class="tag tag-warn">WARN</span></td><td>Executive Queues</td><td>Ready queue (16) or Event queue (32) full</td><td>Queue fill count</td></tr>
+              <tr><td class="font-mono">7</td><td class="font-mono">0x07</td><td><strong>NEXUS_EVENT_TYPE_FAULT_LATCHED</strong></td><td><span class="tag tag-error">ERROR</span></td><td>Executive</td><td>Subsystem error latched in executive state</td><td>Latched fault code</td></tr>
+              <tr><td class="font-mono">8</td><td class="font-mono">0x08</td><td><strong>NEXUS_EVENT_TYPE_FAULT_CLEARED</strong></td><td><span class="tag tag-ok">INFO</span></td><td>Executive</td><td>Operator issued CLEAR FAULTS command</td><td>Previous fault code</td></tr>
+              <tr><td class="font-mono">9</td><td class="font-mono">0x09</td><td><strong>NEXUS_EVENT_TYPE_SENSOR_SAMPLE</strong></td><td><span class="tag tag-neutral">DEBUG</span></td><td>Sensor Registry</td><td>New sensor reading acquired into ring buffer</td><td>Sample count</td></tr>
+              <tr><td class="font-mono">10</td><td class="font-mono">0x0A</td><td><strong>NEXUS_EVENT_TYPE_COMMAND_RECEIVED</strong></td><td><span class="tag tag-info">INFO</span></td><td>Dispatcher</td><td>Validated command packet received</td><td>Command ID (<code>cmd_id</code>)</td></tr>
+              <tr><td class="font-mono">11</td><td class="font-mono">0x0B</td><td><strong>NEXUS_EVENT_TYPE_COMMAND_COMPLETED</strong></td><td><span class="tag tag-info">INFO</span></td><td>Dispatcher</td><td>Command execution finished and response sent</td><td>Response status code</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 style="color: #00ffff; font-size: 0.85rem; margin-bottom: 0.5rem; letter-spacing: 0.05em;">GROUND STATION MONITORING INCIDENT RULES (ground_station/monitoring)</h4>
+        <div class="table-container" style="overflow-x: auto; border: 1px solid #1f2f47; border-radius: 6px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Rule ID</th>
+                <th>Rule Name</th>
+                <th>Severity</th>
+                <th>Trigger Criteria</th>
+                <th>Resolution Criteria</th>
+                <th>Acknowledge / Reset Command</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-mono text-cyan">dht_sensor_invalid</td>
+                <td>DHT Sensor Invalid Readings</td>
+                <td><span class="tag tag-warn">WARNING</span></td>
+                <td><code>dht_valid=false</code> in ≥3 samples & invalid ratio ≥50% in window</td>
+                <td>≥3 consecutive valid samples with checksum pass</td>
+                <td><code>ACKNOWLEDGE WARNING</code>, <code>RESET SENSOR_STATE</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan">stale_telemetry</td>
+                <td>Telemetry Freshness Loss</td>
+                <td><span class="tag tag-warn">WARNING</span></td>
+                <td>Packet arrival age &gt; 6.0s (cadence 2.0s × grace 3.0)</td>
+                <td>Fresh telemetry packet arrives within cadence</td>
+                <td><code>ACKNOWLEDGE WARNING</code>, <code>START TELEMETRY</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan">executive_task_failure</td>
+                <td>Cyclic Executive Task Failure</td>
+                <td><span class="tag tag-error">CRITICAL</span></td>
+                <td>ESP32 cumulative <code>jobs_failed</code> counter increases (delta &gt; 0)</td>
+                <td>2 consecutive evaluation windows with delta = 0</td>
+                <td><code>ACKNOWLEDGE FAULT</code>, <code>CLEAR FAULTS</code></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan">device_reboot</td>
+                <td>Unplanned Device Reboot</td>
+                <td><span class="tag tag-info">INFO</span></td>
+                <td>Uptime drops or sequence counter resets to 0</td>
+                <td>Monotonic uptime increments normally</td>
+                <td><code>ACKNOWLEDGE EVENT</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUBPANEL 4: Actuators & Peripherals -->
+      <div id="ref-panel-actuators" class="ref-subpanel">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 style="color: #00ffff; font-size: 1rem;">Actuators & Peripheral Outputs</h3>
+          <p style="font-size: 0.8rem; color: #a0aec0;">Hardware pin assignments, valid ranges, safety constraints, and control commands for all system outputs.</p>
+        </div>
+
+        <div class="table-container" style="overflow-x: auto; border: 1px solid #1f2f47; border-radius: 6px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Peripheral ID</th>
+                <th>Name & Function</th>
+                <th>Physical Pin</th>
+                <th>Valid Values / Range</th>
+                <th>Safety Constraints</th>
+                <th>Controlling Command</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="font-mono text-cyan"><strong>leds</strong> (1)</td>
+                <td>Status LED 1: Red (Heartbeat & Power)</td>
+                <td class="font-mono">GPIO 27</td>
+                <td><code>state: 0 (OFF), 1 (ON)</code></td>
+                <td>Safe indicator output</td>
+                <td><code>ACTUATE LED {"led_id": 1, "state": 1}</code></td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>leds</strong> (2)</td>
+                <td>Status LED 2: Green (Comm & Telemetry Ingestion)</td>
+                <td class="font-mono">GPIO 14</td>
+                <td><code>state: 0 (OFF), 1 (ON)</code></td>
+                <td>Safe indicator output</td>
+                <td><code>ACTUATE LED {"led_id": 2, "state": 1}</code></td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>leds</strong> (3)</td>
+                <td>Status LED 3: Blue (Sensor Acquisition)</td>
+                <td class="font-mono">GPIO 12</td>
+                <td><code>state: 0 (OFF), 1 (ON)</code></td>
+                <td>Safe indicator output</td>
+                <td><code>ACTUATE LED {"led_id": 3, "state": 1}</code></td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>leds</strong> (4)</td>
+                <td>Status LED 4: Yellow (Warning / Alert)</td>
+                <td class="font-mono">GPIO 13</td>
+                <td><code>state: 0 (OFF), 1 (ON)</code></td>
+                <td>Safe indicator output</td>
+                <td><code>ACTUATE LED {"led_id": 4, "state": 1}</code></td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>buzzer</strong></td>
+                <td>Active Piezo Buzzer (Audio Alert)</td>
+                <td class="font-mono">GPIO 15</td>
+                <td><code>duration_ms: 10 - 5000</code></td>
+                <td>Sound level constraint; automatic timeout</td>
+                <td><code>ACTUATE BUZZER {"duration_ms": 200}</code></td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-cyan"><strong>74hc595</strong></td>
+                <td>74HC595 8-Bit Shift Register</td>
+                <td class="font-mono">SER: 16, RCLK: 17, SRCLK: 21</td>
+                <td><code>pattern: 0x00 - 0xFF</code> (8-bit)</td>
+                <td>Do not exceed maximum current draw (70mA total)</td>
+                <td><code>ACTUATE RELAY</code>, <code>DISPLAY PATTERN</code></td>
+                <td><span class="tag tag-ok">MOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-muted">relay_k1</td>
+                <td>Power Relay K1</td>
+                <td class="font-mono">GPIO 3</td>
+                <td><code>state: 0, 1</code></td>
+                <td>High-voltage switching isolation</td>
+                <td><code>ACTUATE RELAY</code></td>
+                <td><span class="tag tag-neutral">UNMOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-muted">dc_motors</td>
+                <td>L293D Dual DC Motor Driver</td>
+                <td class="font-mono">GPIO 27, 14, 12, 13, 22</td>
+                <td><code>speed: -255 to 255</code></td>
+                <td>High current load</td>
+                <td><code>ACTUATE MOTOR</code></td>
+                <td><span class="tag tag-neutral">UNMOUNTED</span></td>
+              </tr>
+              <tr>
+                <td class="font-mono text-muted">servo</td>
+                <td>PWM Servo Motor</td>
+                <td class="font-mono">GPIO 33</td>
+                <td><code>angle: 0 - 180°</code></td>
+                <td>Mechanical boundary limits</td>
+                <td><code>ACTUATE SERVO</code></td>
+                <td><span class="tag tag-neutral">UNMOUNTED</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUBPANEL 6: Runtime ID Discovery Workflows -->
+      <div id="ref-panel-workflows" class="ref-subpanel">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 style="color: #00ffff; font-size: 1rem;">Runtime Identifier Discovery & Acknowledgement Workflows</h3>
+          <p style="font-size: 0.8rem; color: #a0aec0;">Standard operating procedures for discovering runtime entity IDs (events, faults, warnings), mapping values, and executing verifiable acknowledgements without guessing.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+          <!-- WORKFLOW 1: ACKNOWLEDGE EVENT -->
+          <div style="background: rgba(13,19,31,0.85); border: 1px solid rgba(0,255,255,0.25); border-radius: 6px; padding: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4 style="color: #00ffff; font-size: 0.85rem; letter-spacing: 0.05em;">WORKFLOW 1: ACKNOWLEDGE EVENT</h4>
+              <span class="tag tag-ok">COMMAND 0x0A03 (2563)</span>
+            </div>
+            <p style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 0.5rem;"><code>event_id</code> identifies either a static <strong>firmware event type</strong> (1..11 from <code>nexus_event_queue.h</code>) or a sequential event log ID from runtime queue snapshot.</p>
+            <div style="font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+              <strong>Step 1: Discover Active Event IDs</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">curl -s http://127.0.0.1:8000/api/incidents | jq .firmware_event_types</div>
+              <div class="text-muted" style="font-size:0.7rem;">Static Event Codes: 1=SYSTEM_BOOT, 2=JOB_STARTED, 3=JOB_COMPLETED, 4=JOB_FAILED, 5=DEADLINE_MISS, 6=QUEUE_OVERFLOW, 7=FAULT_LATCHED, 8=FAULT_CLEARED, 9=SENSOR_SAMPLE, 10=COMMAND_RECEIVED, 11=COMMAND_COMPLETED.</div>
+            </div>
+            <div style="font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+              <strong>Step 2: Submit Valid Acknowledge Request</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">curl -X POST http://127.0.0.1:8000/api/command \
+  -H "Content-Type: application/json" \
+  -d '{"verb": "ACKNOWLEDGE", "noun": "EVENT", "params": {"event_id": 1}}'</div>
+            </div>
+            <div style="font-size: 0.75rem; color: #cbd5e1;">
+              <strong>Step 3: Expected Verification Response</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">{ "status": "ok", "code": 0, "msg": "Event acknowledged", "ack": true }</div>
+            </div>
+          </div>
+
+          <!-- WORKFLOW 2: ACKNOWLEDGE FAULT -->
+          <div style="background: rgba(13,19,31,0.85); border: 1px solid rgba(0,255,255,0.25); border-radius: 6px; padding: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4 style="color: #00ffff; font-size: 0.85rem; letter-spacing: 0.05em;">WORKFLOW 2: ACKNOWLEDGE FAULT</h4>
+              <span class="tag tag-ok">COMMAND 0x0A01 (2561)</span>
+            </div>
+            <p style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 0.5rem;"><code>fault_id</code> identifies an active subsystem fault code (1=DHT Checksum Error, 2=Stale Telem, 3=Out of Bounds) or an incident record in Ground Station monitoring.</p>
+            <div style="font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+              <strong>Step 1: Discover Active Faults</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">curl -s http://127.0.0.1:8000/api/incidents | jq '.active_incidents[] | select(.type=="FAULT")'</div>
+            </div>
+            <div style="font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+              <strong>Step 2: Submit Valid Acknowledge Request</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">curl -X POST http://127.0.0.1:8000/api/command \
+  -H "Content-Type: application/json" \
+  -d '{"verb": "ACKNOWLEDGE", "noun": "FAULT", "params": {"fault_id": 1}}'</div>
+            </div>
+            <div style="font-size: 0.75rem; color: #cbd5e1;">
+              <strong>Step 3: Verification & Fault Reset</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">{ "status": "ok", "code": 0, "msg": "Fault acknowledged", "ack": true }</div>
+              <div class="text-muted" style="font-size:0.7rem; margin-top:0.25rem;">Note: To clear cumulative firmware error counters (<code>jobs_failed = 0</code>), submit <code>CLEAR FAULTS</code> with confirmation.</div>
+            </div>
+          </div>
+
+          <!-- WORKFLOW 3: ACKNOWLEDGE WARNING -->
+          <div style="background: rgba(13,19,31,0.85); border: 1px solid rgba(0,255,255,0.25); border-radius: 6px; padding: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4 style="color: #00ffff; font-size: 0.85rem; letter-spacing: 0.05em;">WORKFLOW 3: ACKNOWLEDGE WARNING</h4>
+              <span class="tag tag-ok">COMMAND 0x0A02 (2562)</span>
+            </div>
+            <p style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 0.5rem;"><code>warning_id</code> identifies an active telemetry threshold alert (e.g., Code 2=Stale Telemetry, Code 3=Ultrasonic Range Exceeded, Code 5=Deadline Miss).</p>
+            <div style="font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+              <strong>Step 1: Discover Active Warnings</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">curl -s http://127.0.0.1:8000/api/incidents | jq '.active_incidents[] | select(.type=="WARNING")'</div>
+            </div>
+            <div style="font-size: 0.75rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+              <strong>Step 2: Submit Valid Acknowledge Request</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">curl -X POST http://127.0.0.1:8000/api/command \
+  -H "Content-Type: application/json" \
+  -d '{"verb": "ACKNOWLEDGE", "noun": "WARNING", "params": {"warning_id": 2}}'</div>
+            </div>
+            <div style="font-size: 0.75rem; color: #cbd5e1;">
+              <strong>Step 3: Verification Response</strong>
+              <div class="ref-code-block" style="margin: 0.25rem 0;">{ "status": "ok", "code": 0, "msg": "Warning acknowledged", "ack": true }</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: rgba(13,19,31,0.85); border: 1px solid rgba(0,255,255,0.2); border-radius: 6px; padding: 1.25rem;">
+          <h4 style="color: #00ffff; font-size: 0.85rem; margin-bottom: 0.5rem;">OPERATIONAL DISTINCTIONS: ACKNOWLEDGE vs CLEAR vs RESET</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; font-size: 0.78rem; color: #cbd5e1; line-height: 1.6;">
+            <div>
+              <strong style="color: #38bdf8;">ACKNOWLEDGE (0x0A):</strong> Operator acknowledgment handshake. ESP32 logs the event transition and asserts <code>ack: true</code>. Does not reset monotonic counters or destroy historical evidence.
+            </div>
+            <div>
+              <strong style="color: #f59e0b;">CLEAR FAULTS (0x0B01):</strong> Resets executive error counters (<code>jobs_failed = 0</code>) and unlocks safety latches. Requires operator confirmation.
+            </div>
+            <div>
+              <strong style="color: #ef4444;">RESET SYSTEM (0x04..):</strong> Destructive hardware or subsystem reset. Resets task queues and hardware peripherals.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBPANEL 6: Protocol & Status Codes -->
+      <div id="ref-panel-protocol" class="ref-subpanel">
+        <div class="panel-header" style="margin-bottom: 1rem;">
+          <h3 style="color: #00ffff; font-size: 1rem;">Protocol Envelope Specification & Status Codes</h3>
+          <p style="font-size: 0.8rem; color: #a0aec0;">Authoritative wire packet structure, execution routing targets, and response status codes.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+          <div style="background: rgba(13,19,31,0.85); border: 1px solid rgba(0,255,255,0.2); border-radius: 6px; padding: 1.25rem;">
+            <h4 style="color: #00ffff; font-size: 0.85rem; margin-bottom: 0.75rem;">CBOR & JSON ENVELOPE FORMAT</h4>
+            <div class="ref-code-block">{
+  "ver": 1,                      // Protocol version (uint8)
+  "dev": "nexus_esp32",          // Device ID (string)
+  "seq": 1024,                   // Monotonic sequence (uint32)
+  "type": "cmd" | "resp" | ...   // Packet type enum
+  "cmd_id": 7938,                // 16-bit command ID (uint16)
+  "verb": "ASK",                 // Command Verb string
+  "noun": "SENSOR",              // Command Noun string
+  "status": "ok",                // Response status string
+  "code": 0,                     // Integer StatusCode enum
+  "msg": "AI response",          // Human readable summary
+  "params": {...},               // Parameter payload map
+  "uptime_ms": 78200             // Monotonic uptime in ms
+}</div>
+          </div>
+
+          <div style="background: rgba(13,19,31,0.85); border: 1px solid rgba(0,255,255,0.2); border-radius: 6px; padding: 1.25rem;">
+            <h4 style="color: #00ffff; font-size: 0.85rem; margin-bottom: 0.75rem;">EXECUTION TARGETS & TRANSPORTS</h4>
+            <ul style="font-size: 0.8rem; color: #a0aec0; padding-left: 1.25rem; line-height: 1.8;">
+              <li><strong style="color:#00ffff;">FIRMWARE (ESP32):</strong> Encoded in CBOR over active USB Serial (<code>/dev/ttyUSB0</code> @ 115200) or MQTT (<code>nexus/cmd</code>). Dispatched by <code>nexus_command_dispatcher.c</code>.</li>
+              <li><strong style="color:#38bdf8;">GROUND_STATION:</strong> Executed locally on host Python server (<code>HOST_LOCAL_OPERATION</code>). No wire envelope is sent to ESP32. Includes <code>ASK SENSOR</code>, <code>ASK SYSTEM</code>, <code>EXPORT TELEMETRY</code>.</li>
+              <li><strong style="color:#94a3b8;">TEST_HARNESS:</strong> Simulated milestone verification commands routed to unit test mocks or host runner binary.</li>
+            </ul>
+          </div>
+        </div>
+
+        <h4 style="color: #00ffff; font-size: 0.85rem; margin-bottom: 0.5rem; letter-spacing: 0.05em;">STATUS CODE ENUMERATION (StatusCode in command_registry.py & nexus_command_registry.h)</h4>
+        <div class="table-container" style="overflow-x: auto; border: 1px solid #1f2f47; border-radius: 6px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Status Name</th>
+                <th>Description</th>
+                <th>Action Required</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="font-mono">0</td><td><span class="tag tag-ok">OK</span></td><td>Command executed successfully</td><td>None; nominal completion</td></tr>
+              <tr><td class="font-mono">1</td><td><span class="tag tag-error">REJECTED</span></td><td>Payload format invalid, bounds exceeded, or precondition violated</td><td>Inspect parameter constraints and schema</td></tr>
+              <tr><td class="font-mono">2</td><td><span class="tag tag-warn">UNKNOWN_CMD</span></td><td>Verb or noun code unrecognized by destination</td><td>Check command ID against canonical registry</td></tr>
+              <tr><td class="font-mono">3</td><td><span class="tag tag-warn">UNSUPPORTED</span></td><td>Command known but not implemented in current build</td><td>Check milestone disposition (e.g. M9/M10 deferred)</td></tr>
+              <tr><td class="font-mono">4</td><td><span class="tag tag-error">FAILED</span></td><td>Execution started but internal handler failed</td><td>Check sensor hardware connection and diagnostics</td></tr>
+              <tr><td class="font-mono">5</td><td><span class="tag tag-warn">DUPLICATE</span></td><td>Duplicate command sequence counter received</td><td>Increment sequence counter</td></tr>
+              <tr><td class="font-mono">6</td><td><span class="tag tag-error">TIMEOUT</span></td><td>No response received before timeout expired</td><td>Verify physical transport connectivity (USB/MQTT)</td></tr>
+              <tr><td class="font-mono">7</td><td><span class="tag tag-warn">CONFIRMATION_REQUIRED</span></td><td>Hazardous operation attempted without confirmation</td><td>Confirm operation via hazardous confirmation dialog</td></tr>
+              <tr><td class="font-mono">8</td><td><span class="tag tag-error">TARGET_UNREACHABLE</span></td><td>Target node (ESP32) is offline or disconnected</td><td>Check USB cable connection or Wi-Fi MQTT broker</td></tr>
+              <tr><td class="font-mono">9</td><td><span class="tag tag-error">INTERNAL_ERROR</span></td><td>Internal ground station or host exception</td><td>Inspect ground station process log</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Hazardous Operation Confirmation Modal -->
+  <div id="confirmation-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-head">
+        <span class="modal-warn-icon">⚠️</span>
+        <h3 class="modal-title">Hazardous Operation Confirmation</h3>
+      </div>
+      <div class="modal-body">
+        <p id="modal-warning-text">This command modifies executive state, flushes history, or resets fault counters.</p>
+        <div class="modal-command-summary" id="modal-command-summary"></div>
+        <div class="confirmation-checkbox-row">
+          <input type="checkbox" id="modal-confirm-check">
+          <label for="modal-confirm-check">I confirm that I want to transmit this command to the system.</label>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button id="modal-btn-cancel" class="btn btn-outline">Cancel</button>
+        <button id="modal-btn-confirm" class="btn btn-danger" disabled>Authorize & Transmit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="mission-footer">
+    <div class="footer-info">
+      <span>NEXUS Mission Control Panel</span> • 
+      <span>Apollo Executive Architecture</span> • 
+      <span>EDU_ROBO V14 Platform</span>
+    </div>
+    <div class="footer-meta">
+      <span>Protocol Version: 1.0</span> • 
+      <span>Ground Station: Active</span>
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

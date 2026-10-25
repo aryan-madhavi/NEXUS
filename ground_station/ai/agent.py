@@ -266,7 +266,7 @@ class NexusConversationalAgent:
             re.search(r"\b((?:esp32|nexus)[0-9a-zA-Z_-]+)\b", q)
             or re.search(r"device\s+([0-9a-zA-Z_-]+)", q)
         )
-        dev = dev_match.group(1) if dev_match else "esp32_01"
+        dev = dev_match.group(1) if dev_match else "nexus_esp32"
 
         tool_name: Optional[str] = None
         tool_args: Dict[str, Any] = {}
@@ -290,8 +290,20 @@ class NexusConversationalAgent:
                 return AgentResponse(
                     content=(
                         "In NEXUS telemetry, 'x0_raw' represents raw uncalibrated ADC counts (0-4095) "
-                        "from multiplexer input channel 0. It is an electrical voltage measurement, "
+                        "from multiplexer input channel 0 (HW-870 Infrared Photodetector). It is an electrical voltage measurement, "
                         "NOT a calibrated gas concentration or ppm value, and must not be used as a safety metric."
+                    ),
+                    tool_calls=[],
+                    tool_results=[],
+                    model="deterministic_fallback_explainer",
+                    fallback_used=True,
+                )
+            elif "x1_raw" in q or "x1" in q or "hall" in q:
+                return AgentResponse(
+                    content=(
+                        "In NEXUS telemetry, 'x1_raw' corresponds to multiplexer input channel 1 (Hall-effect magnetic sensor IC2). "
+                        "On the EDU_ROBO V14 hardware platform, IC2 is UNPOPULATED / NOT MOUNTED. "
+                        "Any reading on x1_raw represents floating ADC noise and cannot be converted to Gauss or Tesla."
                     ),
                     tool_calls=[],
                     tool_results=[],
@@ -301,7 +313,7 @@ class NexusConversationalAgent:
             elif "dht_valid" in q:
                 return AgentResponse(
                     content=(
-                        "In NEXUS telemetry, 'dht_valid' is a boolean flag indicating whether the DHT22 "
+                        "In NEXUS telemetry, 'dht_valid' is a boolean flag indicating whether the DHT11 "
                         "sensor read completed with valid checksum and timing. When dht_valid is False, "
                         "temperature and humidity values are invalid and treated as null (never zero)."
                     ),
@@ -311,9 +323,37 @@ class NexusConversationalAgent:
                     fallback_used=True,
                 )
 
-        # 1. Incident queries (checked before generic freshness because incident IDs may contain rule names like 'stale_telemetry')
-        if "inc_" in user_query or any(w in q for w in ("incident", "incidents", "alert", "alerts", "alarm", "fault")):
-            # Check if specific incident ID is queried
+        # 1. Statistics / min / max / mean / historical queries (checked before trend so max queries are never misrouted)
+        if any(w in q for w in ("statistics", "average", "mean", "minimum", "maximum", "min", "max", "highest", "lowest", "peak")):
+            sig = "dist_cm" if any(w in q for w in ("dist", "distance", "hcsr04", "ultrasonic")) else "temp"
+            if "hum" in q or "humidity" in q:
+                sig = "hum"
+            elif "ldr" in q or "light" in q:
+                sig = "ldr_raw"
+            elif "x0" in q or "gas" in q or "hw870" in q or "infrared" in q or "ir" in q:
+                sig = "x0_raw"
+            elif "x1" in q or "hall" in q or "magnetic" in q:
+                sig = "x1_raw"
+            elif "slot" in q or "moc7811" in q or "optical" in q:
+                sig = "slot_state"
+            elif "heap" in q:
+                sig = "free_heap"
+
+            win = "-15m"
+            if any(p in q for p in ("to date", "all time", "all-time", "ever", "history", "historical", "since beginning", "to-date")):
+                win = "-30d"
+            elif "24h" in q or "day" in q or "today" in q:
+                win = "-24h"
+            elif "1h" in q or "hour" in q:
+                win = "-1h"
+            elif "7d" in q or "week" in q:
+                win = "-7d"
+
+            tool_name = "get_signal_statistics"
+            tool_args = {"device_id": dev, "signal": sig, "window": win}
+
+        # 2. Incident queries
+        elif "inc_" in user_query or any(w in q for w in ("incident", "incidents", "alert", "alerts", "alarm", "fault")):
             inc_match = re.search(r"\b(inc_[0-9a-zA-Z_.:-]+)\b", user_query)
             if inc_match:
                 tool_name = "get_incident_details"
@@ -325,20 +365,26 @@ class NexusConversationalAgent:
                 tool_name = "get_active_incidents"
                 tool_args = {"device_id": dev}
 
-        # 2. Stale / Freshness queries
+        # 3. Overall system status and complete health queries
+        elif any(w in q for w in ("health status", "health of", "complete health", "system health", "operational status", "system status", "health")):
+            tool_name = "get_telemetry_freshness"
+            msg_type = "telem"
+            tool_args = {"device_id": dev, "msg_type": msg_type}
+
+        # 4. Freshness / cadence queries
         elif any(w in q for w in ("stale", "fresh", "cadence", "offline", "alive", "last seen")):
             tool_name = "get_telemetry_freshness"
             msg_type = "hb" if "heartbeat" in q or "hb" in q else ("status" if "status" in q else "telem")
             tool_args = {"device_id": dev, "msg_type": msg_type}
 
-        # 3. Reboot / Reset / Uptime diagnostics
+        # 5. Reboot / Reset / Uptime diagnostics
         elif any(w in q for w in ("reboot", "reset", "uptime", "restart")):
             tool_name = "get_latest_telemetry"
             tool_args = {"device_id": dev}
 
-        # 4. Trend queries
+        # 6. Trend queries
         elif any(w in q for w in ("trend", "rising", "falling", "slope", "rate")):
-            sig = "temp"
+            sig = "dist_cm" if any(w in q for w in ("dist", "distance", "hcsr04", "ultrasonic")) else "temp"
             if "hum" in q or "humidity" in q:
                 sig = "hum"
             elif "ldr" in q or "light" in q:
@@ -349,45 +395,23 @@ class NexusConversationalAgent:
                 sig = "x1_raw"
             elif "slot" in q or "moc7811" in q or "optical" in q:
                 sig = "slot_state"
-            elif "dist" in q or "ultrasonic" in q or "hcsr04" in q:
-                sig = "dist_cm"
             elif "heap" in q:
                 sig = "free_heap"
             tool_name = "get_signal_trend"
             tool_args = {"device_id": dev, "signal": sig, "window": "-15m"}
 
-        # 5. Sensor quality / invalid readings
+        # 7. Sensor quality / invalid readings
         elif any(w in q for w in ("sensor quality", "dht_valid", "invalid reading", "sensor health", "corrupt")):
             tool_name = "audit_sensor_quality"
             tool_args = {"device_id": dev, "window": "-15m"}
 
-        # 6. Statistics / min / max / mean
-        elif any(w in q for w in ("statistics", "average", "mean", "minimum", "maximum", "min", "max")):
-            sig = "temp"
-            if "hum" in q or "humidity" in q:
-                sig = "hum"
-            elif "ldr" in q or "light" in q:
-                sig = "ldr_raw"
-            elif "x0" in q or "gas" in q or "hw870" in q:
-                sig = "x0_raw"
-            elif "x1" in q or "hall" in q:
-                sig = "x1_raw"
-            elif "slot" in q or "moc7811" in q or "optical" in q:
-                sig = "slot_state"
-            elif "dist" in q or "ultrasonic" in q or "hcsr04" in q:
-                sig = "dist_cm"
-            elif "heap" in q:
-                sig = "free_heap"
-            tool_name = "get_signal_statistics"
-            tool_args = {"device_id": dev, "signal": sig, "window": "-15m"}
-
-        # 7. Executive task failures
+        # 8. Executive task failures
         elif any(w in q for w in ("executive", "task failure", "failed task", "dispatched", "latency")):
             tool_name = "get_active_incidents"
             tool_args = {"device_id": dev}
 
-        # 8. Overall system status
-        elif any(w in q for w in ("system status", "health", "influxdb", "database", "overview")):
+        # 9. Database reachability / InfluxDB overview
+        elif any(w in q for w in ("influxdb", "database", "overview")):
             tool_name = "get_system_status"
             tool_args = {}
 
@@ -468,15 +492,23 @@ class NexusConversationalAgent:
             return "\n".join(lines)
 
         elif tool_name == "get_telemetry_freshness":
-            stale_str = "STALE" if data.get("is_stale") else "FRESH"
+            stale_str = "STALE (No recent packets)" if data.get("is_stale") else "NOMINAL / FRESH"
             age = data.get("age_seconds")
             cadence = data.get("expected_cadence_sec")
+            uptime_ms = data.get("last_uptime_ms")
+            uptime_str = f"{uptime_ms} ms (~{uptime_ms / 1000.0:.1f}s since last reboot)" if isinstance(uptime_ms, (int, float)) else "Unknown"
+            dht_str = "VALID (Checksum pass)" if data.get("dht_healthy") else "INVALID / UNHEALTHY"
+            transports = ", ".join(data.get("transports_seen", [])) or "None active"
+
             return (
-                f"Telemetry Freshness for {data.get('device_id')} ({data.get('message_type')}):\n"
-                f"- Status: {stale_str}\n"
-                f"- Age: {age}s (expected cadence: {cadence}s)\n"
-                f"- Last Seen Host: {data.get('last_seen_host')} UTC\n"
-                f"- Transports Seen: {', '.join(data.get('transports_seen', []))}"
+                f"Health & Operational Status for ESP32 ({data.get('device_id')}):\n"
+                f"- Telemetry Stream: {stale_str} (packet arrival age: {age}s, expected cadence: {cadence}s)\n"
+                f"- Monotonic Uptime: {uptime_str}\n"
+                f"- Last Telemetry Sequence: #{data.get('last_seq')} at {data.get('last_seen_host')} UTC\n"
+                f"- Active Transports Observed: {transports}\n"
+                f"- Primary Sensors Health: DHT11 temperature/humidity {dht_str}\n"
+                f"- Observable Scope: Continuous telemetry ingestion active via USB Serial & MQTT to InfluxDB.\n"
+                f"- Unobservable / Hardware Constraints: Internal FreeRTOS task stacks and CPU load are not exposed in telemetry stream; unmounted peripherals (Relay K1, DC Motors, Servo, Touch, Vibration, LM35, LCD, and Hall IC2) are absent from EDU_ROBO V14 PCB."
             )
 
         elif tool_name == "get_active_incidents":
@@ -501,12 +533,30 @@ class NexusConversationalAgent:
             )
 
         elif tool_name == "get_signal_statistics":
+            sig = data.get("signal", "")
+            unit = " cm" if sig == "dist_cm" else ("°C" if sig in ("temp", "temperature") else ("%" if sig in ("hum", "humidity") else " counts"))
+            first_t = data.get("first_time") or "N/A"
+            last_t = data.get("last_time") or "N/A"
+            max_val = data.get("max")
+            min_val = data.get("min")
+            mean_val = data.get("mean")
+            count = data.get("sample_count", 0)
+            inval = data.get("invalid_count", 0)
+            win = data.get("window", "")
+
+            note_str = ""
+            if sig == "dist_cm":
+                note_str = " (HC-SR04 ultrasonic distance sensor)"
+            elif sig == "x0_raw":
+                note_str = " (HW-870 infrared photodetector raw ADC)"
+
             return (
-                f"Summary statistics for '{data.get('signal')}' on {data.get('device_id')} over {data.get('window')}:\n"
-                f"- Min: {data.get('min')}, Max: {data.get('max')}, Mean: {data.get('mean')}\n"
-                f"- Sample Count: {data.get('sample_count')} (invalid count: {data.get('invalid_count')})\n"
-                f"- First: {data.get('first_value')} ({data.get('first_time')})\n"
-                f"- Last: {data.get('last_value')} ({data.get('last_time')})"
+                f"Historical telemetry statistics for '{sig}'{note_str} on device '{data.get('device_id')}' over window {win}:\n"
+                f"- Maximum Recorded Value: {max_val}{unit}\n"
+                f"- Minimum Recorded Value: {min_val}{unit}\n"
+                f"- Mean Value: {mean_val}{unit}\n"
+                f"- Valid Samples: {count} (invalid readings: {inval})\n"
+                f"- Time Range: {first_t} to {last_t} UTC"
             )
 
         elif tool_name == "audit_sensor_quality":

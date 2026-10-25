@@ -322,11 +322,18 @@ bool nexus_envelope_parse_header_ext(const uint8_t *data,
         if (type_buf_len == 0) {
             return false;
         }
-        const char *type_pos = strstr(scratch, "\"type\":\"");
+        const char *type_pos = strstr(scratch, "\"type\":");
         if (!type_pos) {
             return false;
         }
-        const char *tstart = type_pos + 8;
+        const char *tstart = type_pos + 7;
+        while (*tstart == ' ') {
+            tstart++;
+        }
+        if (*tstart != '\"') {
+            return false;
+        }
+        tstart++;
         const char *tend = strchr(tstart, '\"');
         if (!tend) {
             return false;
@@ -341,20 +348,26 @@ bool nexus_envelope_parse_header_ext(const uint8_t *data,
 
     /* 4. Parse "dev":"<dev>" if requested */
     if (out_dev && dev_buf_len > 0) {
-        const char *dev_pos = strstr(scratch, "\"dev\":\"");
+        const char *dev_pos = strstr(scratch, "\"dev\":");
         if (dev_pos) {
-            const char *dstart = dev_pos + 7;
-            const char *dend = strchr(dstart, '\"');
-            if (dend) {
-                size_t dlen = (size_t)(dend - dstart);
-                if (dlen >= dev_buf_len) {
-                    dlen = dev_buf_len - 1;
+            const char *dstart = dev_pos + 6;
+            while (*dstart == ' ') {
+                dstart++;
+            }
+            if (*dstart == '\"') {
+                dstart++;
+                const char *dend = strchr(dstart, '\"');
+                if (dend) {
+                    size_t dlen = (size_t)(dend - dstart);
+                    if (dlen >= dev_buf_len) {
+                        dlen = dev_buf_len - 1;
+                    }
+                    if (dlen >= sizeof(temp_dev)) {
+                        dlen = sizeof(temp_dev) - 1;
+                    }
+                    memcpy(temp_dev, dstart, dlen);
+                    temp_dev[dlen] = '\0';
                 }
-                if (dlen >= sizeof(temp_dev)) {
-                    dlen = sizeof(temp_dev) - 1;
-                }
-                memcpy(temp_dev, dstart, dlen);
-                temp_dev[dlen] = '\0';
             }
         }
     }

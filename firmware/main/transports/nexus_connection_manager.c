@@ -32,13 +32,44 @@ static pthread_mutex_t s_host_conn_mgr_mutex = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 #ifdef ESP_PLATFORM
+#include <fcntl.h>
+#include <unistd.h>
+
 static void conn_mgr_task(void *arg)
 {
     nexus_conn_mgr_t *mgr = (nexus_conn_mgr_t *)arg;
     ESP_LOGI(TAG, "Connection manager task started");
 
+    /* Ensure stdin is non-blocking for serial command ingress */
+    fcntl(fileno(stdin), F_SETFL, O_NONBLOCK);
+
+    char s_rx_line[NEXUS_ENVELOPE_MAX_LEN];
+    size_t s_rx_idx = 0;
+
     while (mgr && atomic_load_explicit(&mgr->running, memory_order_acquire)) {
         nexus_conn_mgr_process_tx_queue(mgr);
+
+        /* Drain non-blocking serial RX characters from stdin */
+        char rx_buf[64];
+        ssize_t n = read(fileno(stdin), rx_buf, sizeof(rx_buf));
+        if (n > 0) {
+            for (ssize_t i = 0; i < n; i++) {
+                char ch = rx_buf[i];
+                if (ch == '\n' || ch == '\r') {
+                    if (s_rx_idx > 0) {
+                        s_rx_line[s_rx_idx] = '\0';
+                        nexus_conn_mgr_process_rx(mgr, NEXUS_TRANSPORT_TYPE_SERIAL,
+                                                  (const uint8_t *)s_rx_line, s_rx_idx);
+                        s_rx_idx = 0;
+                    }
+                } else if (s_rx_idx < sizeof(s_rx_line) - 1) {
+                    s_rx_line[s_rx_idx++] = ch;
+                } else {
+                    s_rx_idx = 0; /* Overflow: discard oversized frame */
+                }
+            }
+        }
+
         /* Sleep with immediate wakeup on stop notification */
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
     }
