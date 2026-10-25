@@ -120,35 +120,52 @@
   }
 
   // Tab Navigation
+  function activateTab(rawTabId, updateHash = false) {
+    const targetTabId = rawTabId === 'tab-dashboard' ? 'tab-telemetry' : rawTabId;
+    const matchBtn = Array.from(el.tabBtns).find((b) => b.getAttribute('data-tab') === targetTabId);
+    if (!matchBtn) return false;
+
+    el.tabBtns.forEach((b) => {
+      const isTarget = b === matchBtn;
+      b.classList.toggle('active', isTarget);
+      b.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+    });
+    el.tabPanels.forEach((p) => {
+      p.classList.toggle('active', p.id === targetTabId);
+    });
+
+    if (targetTabId === 'tab-reference') {
+      renderCommandReference();
+    }
+    if (updateHash && window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', `#${targetTabId}`);
+    }
+    return true;
+  }
+
   function initTabs() {
     el.tabBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         const targetTabId = btn.getAttribute('data-tab');
-        el.tabBtns.forEach((b) => b.classList.remove('active'));
-        el.tabPanels.forEach((p) => p.classList.remove('active'));
-
-        btn.classList.add('active');
-        const activePanel = document.getElementById(targetTabId);
-        if (activePanel) {
-          activePanel.classList.add('active');
-          if (targetTabId === 'tab-reference') {
-            renderCommandReference();
-          }
-        }
+        activateTab(targetTabId, true);
       });
     });
 
-    const currentHash = window.location.hash ? window.location.hash.substring(1) : '';
-    const currentPath = window.location.pathname || '';
-    let targetTab = currentHash;
-    if (!targetTab) {
-      if (currentPath === '/overview') targetTab = 'tab-dashboard';
-      else if (currentPath === '/diagnostics') targetTab = 'tab-services';
-    }
-    if (targetTab) {
-      const matchBtn = Array.from(el.tabBtns).find((b) => b.getAttribute('data-tab') === targetTab);
-      if (matchBtn) matchBtn.click();
-    }
+    const applyLocationTab = () => {
+      const currentHash = window.location.hash ? window.location.hash.substring(1) : '';
+      const currentPath = window.location.pathname || '';
+      let targetTab = currentHash;
+      if (!targetTab) {
+        if (currentPath === '/overview') targetTab = 'tab-telemetry';
+        else if (currentPath === '/diagnostics') targetTab = 'tab-services';
+      }
+      if (targetTab) {
+        activateTab(targetTab, false);
+      }
+    };
+
+    applyLocationTab();
+    window.addEventListener('hashchange', applyLocationTab);
   }
 
   // Toast Notifications
@@ -326,7 +343,7 @@
 
     const hexId = '0x' + Number(cmd.cmd_id).toString(16).toUpperCase().padStart(4, '0');
     el.metaCmdId.textContent = `${hexId} (${cmd.cmd_id})`;
-    el.metaDestination.textContent = cmd.destination || 'FIRMWARE';
+    el.metaDestination.textContent = String(cmd.destination || 'FIRMWARE').toUpperCase();
     el.metaDisposition.textContent = cmd.disposition || 'REQUIRED';
 
     if (cmd.is_supported) {
@@ -355,6 +372,9 @@
       const row = document.createElement('div');
       row.className = 'form-group param-field-row';
 
+      const defaultVal = param.default !== undefined ? param.default : param.default_value;
+      const unitStr = param.units || param.unit || '';
+
       const label = document.createElement('label');
       label.setAttribute('for', `param-${param.name}`);
       label.textContent = `${param.name} (${param.type}):`;
@@ -369,7 +389,7 @@
           const opt = document.createElement('option');
           opt.value = v;
           opt.textContent = String(v);
-          if (param.default_value !== null && String(param.default_value) === String(v)) {
+          if (defaultVal !== null && defaultVal !== undefined && String(defaultVal) === String(v)) {
             opt.selected = true;
           }
           inputEl.appendChild(opt);
@@ -385,7 +405,7 @@
         const optTrue = document.createElement('option');
         optTrue.value = '1';
         optTrue.textContent = '1 (True / Enabled)';
-        if (param.default_value === 1 || param.default_value === true) {
+        if (defaultVal === 1 || defaultVal === true || defaultVal === '1' || defaultVal === 'true') {
           optTrue.selected = true;
         } else {
           optFalse.selected = true;
@@ -401,20 +421,29 @@
         if (param.type === 'integer' || param.type === 'int') {
           inputEl.type = 'number';
           inputEl.step = '1';
-          if (param.min_value !== null) inputEl.min = param.min_value;
-          if (param.max_value !== null) inputEl.max = param.max_value;
-          inputEl.value = param.default_value !== null ? param.default_value : 0;
+          if (param.min_value !== null && param.min_value !== undefined) inputEl.min = param.min_value;
+          if (param.max_value !== null && param.max_value !== undefined) inputEl.max = param.max_value;
+          const initialInt = (defaultVal !== null && defaultVal !== undefined)
+            ? defaultVal
+            : (param.min_value !== null && param.min_value !== undefined ? param.min_value : 0);
+          inputEl.value = String(initialInt);
           state.paramInputs[param.name] = parseInt(inputEl.value, 10);
         } else if (param.type === 'float' || param.type === 'double' || param.type === 'number') {
           inputEl.type = 'number';
           inputEl.step = '0.1';
-          if (param.min_value !== null) inputEl.min = param.min_value;
-          if (param.max_value !== null) inputEl.max = param.max_value;
-          inputEl.value = param.default_value !== null ? param.default_value : 0.0;
+          if (param.min_value !== null && param.min_value !== undefined) inputEl.min = param.min_value;
+          if (param.max_value !== null && param.max_value !== undefined) inputEl.max = param.max_value;
+          const initialFloat = (defaultVal !== null && defaultVal !== undefined)
+            ? defaultVal
+            : (param.min_value !== null && param.min_value !== undefined ? param.min_value : 0.0);
+          inputEl.value = String(initialFloat);
           state.paramInputs[param.name] = parseFloat(inputEl.value);
         } else {
           inputEl.type = 'text';
-          inputEl.value = param.default_value !== null ? param.default_value : '';
+          inputEl.value = (defaultVal !== null && defaultVal !== undefined) ? String(defaultVal) : '';
+          if (param.description) {
+            inputEl.placeholder = param.description;
+          }
           state.paramInputs[param.name] = inputEl.value;
         }
       }
@@ -425,9 +454,11 @@
         } else if (param.type === 'boolean' || param.type === 'bool') {
           state.paramInputs[param.name] = parseInt(inputEl.value, 10);
         } else if (param.type === 'integer' || param.type === 'int') {
-          state.paramInputs[param.name] = parseInt(inputEl.value, 10) || 0;
+          const parsed = parseInt(inputEl.value, 10);
+          state.paramInputs[param.name] = Number.isNaN(parsed) ? 0 : parsed;
         } else if (param.type === 'float' || param.type === 'double' || param.type === 'number') {
-          state.paramInputs[param.name] = parseFloat(inputEl.value) || 0.0;
+          const parsed = parseFloat(inputEl.value);
+          state.paramInputs[param.name] = Number.isNaN(parsed) ? 0.0 : parsed;
         } else {
           state.paramInputs[param.name] = inputEl.value;
         }
@@ -440,11 +471,11 @@
       const helper = document.createElement('div');
       helper.className = 'param-helper-text';
       let metaInfo = [];
-      if (param.min_value !== null && param.max_value !== null) {
+      if (param.min_value !== null && param.min_value !== undefined && param.max_value !== null && param.max_value !== undefined) {
         metaInfo.push(`Range: [${param.min_value} .. ${param.max_value}]`);
       }
-      if (param.unit) {
-        metaInfo.push(`Unit: ${param.unit}`);
+      if (unitStr) {
+        metaInfo.push(`Unit: ${unitStr}`);
       }
       if (param.description) {
         metaInfo.push(param.description);
@@ -467,7 +498,7 @@
       return;
     }
 
-    const destination = state.currentCmd.destination || 'FIRMWARE';
+    const destination = String(state.currentCmd.destination || 'FIRMWARE').toUpperCase();
     if (destination !== 'FIRMWARE') {
       const preview = {
         _execution_path: "HOST_LOCAL_OPERATION",
@@ -513,16 +544,23 @@
 
   function openConfirmationModal(cmd) {
     state.pendingHazardCommand = cmd;
+    state.lastFocusedElement = document.activeElement;
     el.modalWarningText.textContent = `Warning: The command "${state.currentVerb} ${state.currentNoun}" is classified as a hazardous operation. It modifies system executive state or clears diagnostic data.`;
     el.modalCommandSummary.textContent = `${state.currentVerb} ${state.currentNoun} [ID: ${cmd.cmd_id}] • Params: ${JSON.stringify(state.paramInputs)}`;
     el.modalConfirmCheck.checked = false;
     el.modalBtnConfirm.disabled = true;
     el.confirmationModal.style.display = 'flex';
+    if (el.modalConfirmCheck) {
+      el.modalConfirmCheck.focus();
+    }
   }
 
   function closeConfirmationModal() {
     el.confirmationModal.style.display = 'none';
     state.pendingHazardCommand = null;
+    if (state.lastFocusedElement && typeof state.lastFocusedElement.focus === 'function') {
+      state.lastFocusedElement.focus();
+    }
   }
 
   async function executeCommand(isConfirmed) {
@@ -706,33 +744,47 @@
     }
 
     el.tbodyAuditHistory.innerHTML = '';
-    const reversed = [...history].reverse();
+    const correlatedSeqs = new Set(
+      history
+        .filter((e) => e.type === 'cmd_response' && e.seq !== undefined)
+        .map((e) => e.seq)
+    );
+    const filteredHistory = history.filter((e) => {
+      if (e.type === 'inbound_response' && e.seq !== undefined && correlatedSeqs.has(e.seq)) {
+        return false;
+      }
+      return true;
+    });
+    const reversed = [...filteredHistory].reverse();
 
     reversed.forEach((entry) => {
       const tr = document.createElement('tr');
+      const payload = entry.payload || {};
       const timeStr = entry.timestamp ? new Date(entry.timestamp * 1000).toISOString().substring(11, 19) : '--:--:--';
-      const seq = entry.seq !== undefined ? entry.seq : '-';
+      const seq = entry.seq !== undefined ? entry.seq : (payload.seq !== undefined ? payload.seq : '-');
       const route = entry.transport || 'auto';
       const type = entry.type || 'cmd';
-      const verb = entry.verb || '-';
-      const noun = entry.noun || '-';
-      const status = entry.status || 'dispatched';
-      const code = entry.code !== undefined ? entry.code : '-';
-      const details = entry.msg || JSON.stringify(entry.params || {});
+      const verb = entry.verb || payload.verb || '-';
+      const noun = entry.noun || payload.noun || '-';
+      const status = entry.status || payload.status || (type === 'inbound_response' ? 'ok' : 'dispatched');
+      const code = entry.code !== undefined ? entry.code : (payload.code !== undefined ? payload.code : '-');
+      const details = entry.details || entry.msg || payload.msg || JSON.stringify(entry.params || payload || {});
 
       let tagClass = 'tag-neutral';
-      if (status === 'ok') tagClass = 'tag-ok';
-      else if (status === 'unsupported') tagClass = 'tag-warn';
-      else if (status === 'rejected' || status === 'timeout' || status === 'error') tagClass = 'tag-error';
+      const statusLower = String(status).toLowerCase();
+      if (statusLower === 'ok' || statusLower === 'completed') tagClass = 'tag-ok';
+      else if (statusLower === 'dispatched') tagClass = 'tag-info';
+      else if (statusLower === 'unsupported') tagClass = 'tag-warn';
+      else if (statusLower === 'rejected' || statusLower === 'timeout' || statusLower === 'error' || statusLower === 'failed') tagClass = 'tag-error';
 
       tr.innerHTML = `
         <td class="font-mono">${timeStr}</td>
         <td class="font-mono">${seq}</td>
         <td class="font-mono"><span class="code-pill text-cyan">${escapeHtml(route)}</span></td>
-        <td><span class="code-pill">${type}</span></td>
-        <td class="font-bold">${verb}</td>
-        <td class="font-bold">${noun}</td>
-        <td><span class="tag ${tagClass}">${status.toUpperCase()}</span></td>
+        <td><span class="code-pill">${escapeHtml(type)}</span></td>
+        <td class="font-bold">${escapeHtml(verb)}</td>
+        <td class="font-bold">${escapeHtml(noun)}</td>
+        <td><span class="tag ${tagClass}">${escapeHtml(String(status).toUpperCase())}</span></td>
         <td class="font-mono">${code}</td>
         <td class="text-sm truncate-cell" title="${escapeHtml(details)}">${escapeHtml(details)}</td>
       `;
@@ -784,7 +836,7 @@
         port: 3000,
         url: services.grafana?.url || 'http://127.0.0.1:3000',
         status: services.grafana?.status || 'offline',
-        desc: 'Interactive telemetry telemetry charts, gauge clusters, and historical environmental time-series panels.',
+        desc: 'Interactive telemetry charts, gauge clusters, and historical environmental time-series panels.',
         btnText: 'Open Grafana',
       },
       {
@@ -929,6 +981,18 @@
       closeConfirmationModal();
       await executeCommand(true);
     });
+    if (el.confirmationModal) {
+      el.confirmationModal.addEventListener('click', (e) => {
+        if (e.target === el.confirmationModal) {
+          closeConfirmationModal();
+        }
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && el.confirmationModal && el.confirmationModal.style.display === 'flex') {
+        closeConfirmationModal();
+      }
+    });
 
     // Refresh & Export
     if (el.refreshAllBtn) {
@@ -980,9 +1044,12 @@
     const refSubpanels = document.querySelectorAll('.ref-subpanel');
     refSubtabBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
-        refSubtabBtns.forEach((b) => b.classList.remove('active'));
+        refSubtabBtns.forEach((b) => {
+          const isTarget = b === btn;
+          b.classList.toggle('active', isTarget);
+          b.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+        });
         refSubpanels.forEach((p) => p.classList.remove('active'));
-        btn.classList.add('active');
         const targetId = btn.getAttribute('data-ref-subtab');
         const targetPanel = document.getElementById(targetId);
         if (targetPanel) targetPanel.classList.add('active');
@@ -991,7 +1058,11 @@
   }
 
   // Cross-link Navigation: Jump from Parameter Dictionary to Command Drawer in Catalog
-  window.jumpToCommand = function(verb, noun) {
+  window.jumpToCommand = function(verb, noun, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     const btnSubtabCatalog = document.getElementById('btn-subtab-catalog');
     if (btnSubtabCatalog) btnSubtabCatalog.click();
     const searchInput = document.getElementById('ref-search-input');
@@ -1035,7 +1106,11 @@
   };
 
   // Cross-link Navigation: Jump from Command Drawer to Parameter Dictionary
-  window.jumpToParameter = function(paramName) {
+  window.jumpToParameter = function(paramName, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     const btnSubtabParam = document.getElementById('btn-subtab-parameters');
     if (btnSubtabParam) btnSubtabParam.click();
     const paramInput = document.getElementById('param-search-input');
@@ -1055,7 +1130,7 @@
       const icon = document.getElementById(`icon-dict-${paramName}`);
       if (drawerRow) {
         drawerRow.style.display = 'table-row';
-        if (icon) icon.textContent = '▾';
+        if (icon) icon.textContent = '▼';
       }
     }, 80);
   };
@@ -1069,11 +1144,11 @@
 
     if (detailRow.style.display === 'none' || !detailRow.style.display) {
       detailRow.style.display = 'table-row';
-      if (icon) icon.textContent = '▾';
+      if (icon) icon.textContent = '▼';
       if (mainRow) mainRow.classList.add('cmd-row-expanded');
     } else {
       detailRow.style.display = 'none';
-      if (icon) icon.textContent = '▸';
+      if (icon) icon.textContent = '▶';
       if (mainRow) mainRow.classList.remove('cmd-row-expanded');
     }
   };
@@ -1093,12 +1168,18 @@
       nouns.forEach((noun) => {
         totalCount += 1;
         const cmd = state.catalog[verb][noun];
-        const dest = cmd.destination || 'FIRMWARE';
+        const dest = String(cmd.destination || 'FIRMWARE').toUpperCase();
+        const isTestHarnessCmd = dest === 'TEST_HARNESS' || verb === 'TEST' || verb === 'RUN';
         const key = `${verb}_${noun}`.replace(/[^a-zA-Z0-9_]/g, '_');
 
         // Target Filter
-        if (filter !== 'all' && dest !== filter) {
-          return;
+        const filterUpper = String(filter || 'all').toUpperCase();
+        if (filterUpper !== 'ALL') {
+          if (filterUpper === 'TEST_HARNESS') {
+            if (!isTestHarnessCmd) return;
+          } else if (dest !== filterUpper) {
+            return;
+          }
         }
 
         // Search Filter
@@ -1139,7 +1220,7 @@
             const req = p.required ? '<span style="color:#ff5555;font-weight:bold;">*</span>' : '';
             const typeBadge = `<span class="tag tag-neutral" style="font-size:0.65rem;padding:0.1rem 0.25rem;">${escapeHtml(p.type || 'any')}</span>`;
             const defVal = (p.default !== undefined && p.default !== null) ? ` = ${p.default}` : '';
-            return `<div style="margin-bottom:0.25rem;font-size:0.75rem;"><a href="javascript:void(0)" onclick="jumpToParameter('${p.name}')" style="color:#38bdf8;text-decoration:none;"><code>${escapeHtml(p.name)}</code></a>${req} ${typeBadge}<span class="text-muted">${defVal}</span></div>`;
+            return `<div style="margin-bottom:0.25rem;font-size:0.75rem;"><a href="javascript:void(0)" class="param-jump-link" onclick="jumpToParameter('${p.name}', event)"><code>${escapeHtml(p.name)}</code></a>${req} ${typeBadge}<span class="text-muted">${defVal}</span></div>`;
           }).join('');
         }
 
@@ -1248,7 +1329,7 @@
 
                   return `
                     <tr>
-                      <td class="font-mono"><a href="javascript:void(0)" onclick="jumpToParameter('${p.name}')" style="color:#00ffff; text-decoration:underline;"><strong>${escapeHtml(p.name)}</strong></a></td>
+                      <td class="font-mono"><a href="javascript:void(0)" class="param-jump-link" onclick="jumpToParameter('${p.name}', event)" style="color:#00ffff; text-decoration:underline;"><strong>${escapeHtml(p.name)}</strong></a></td>
                       <td><span class="tag tag-neutral" style="font-size:0.65rem;">${escapeHtml(p.type || 'any')}</span></td>
                       <td>${reqBadge}</td>
                       <td>${semBadge}</td>
@@ -1347,7 +1428,7 @@
         // Main Summary Row
         rows.push(`
           <tr id="row-${key}" class="cmd-row-clickable" onclick="toggleCommandDetail('${key}')" title="Click to view full command schema & examples">
-            <td style="text-align: center;"><span id="icon-${key}" class="font-mono text-cyan" style="font-weight: bold; cursor: pointer;">▸</span></td>
+            <td style="text-align: center;"><span id="icon-${key}" class="font-mono text-cyan" style="font-weight: bold; cursor: pointer;">▶</span></td>
             <td><strong style="color: #00ffff;">${escapeHtml(verb)} ${escapeHtml(noun)}</strong></td>
             <td><code>${hexId}</code> <span class="text-muted" style="font-size:0.75rem;">(${decId})</span></td>
             <td><span class="tag ${targetBadgeClass}">${escapeHtml(dest)}</span></td>
@@ -1368,34 +1449,40 @@
               <div class="cmd-detail-box">
                 <div class="cmd-detail-section">
                   <h5>Parameters & Schema Constraints</h5>
-                  ${paramsTableHtml}
-
-                  <h5 style="margin-top: 1rem;">Execution Semantics & Verification</h5>
-                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.6;">
-                    <div>• <strong>Execution Target:</strong> ${escapeHtml(dest)} (${dest === 'GROUND_STATION' ? 'Executed locally on Ground Station host; no ESP32 packet sent' : 'Dispatched to ESP32 Apollo Executive over Serial/MQTT'})</div>
-                    <div>• <strong>Safety Classification:</strong> ${cmd.requires_confirmation ? '⚠️ <span style="color:#f43f5e;font-weight:bold;">HAZARDOUS OPERATION</span> (Modifies executive state or clears fault history; operator confirmation dialog required)' : '<span style="color:#10b981;">SAFE</span> (Non-destructive inspection or standard control)'}</div>
-                    <div>• <strong>Disposition:</strong> <code>${escapeHtml(cmd.disposition)}</code> (M8 Supported: <code>${cmd.is_supported_m8 ? 'YES' : 'NO'}</code>)</div>
-                    <div>• <strong>Source of Truth:</strong> <code>ground_station/command_router/command_registry.py</code> & <code>firmware/main/command/nexus_command_registry.h</code></div>
+                  <div class="table-responsive">
+                    ${paramsTableHtml}
                   </div>
                 </div>
 
-                <div class="cmd-detail-section">
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
-                    <h5 style="margin:0;">Request Payload (JSON)</h5>
-                    ${exampleTypeBadge}
+                <div class="cmd-detail-bottom-grid">
+                  <div class="cmd-detail-section">
+                    <h5>Execution Semantics & Verification</h5>
+                    <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.6;">
+                      <div>• <strong>Execution Target:</strong> ${escapeHtml(dest)} (${dest === 'GROUND_STATION' ? 'Executed locally on Ground Station host; no ESP32 packet sent' : 'Dispatched to ESP32 Apollo Executive over Serial/MQTT'})</div>
+                      <div>• <strong>Safety Classification:</strong> ${cmd.requires_confirmation ? '⚠️ <span style="color:#f43f5e;font-weight:bold;">HAZARDOUS OPERATION</span> (Modifies executive state or clears fault history; operator confirmation dialog required)' : '<span style="color:#10b981;">SAFE</span> (Non-destructive inspection or standard control)'}</div>
+                      <div>• <strong>Disposition:</strong> <code>${escapeHtml(cmd.disposition)}</code> (M8 Supported: <code>${cmd.is_supported_m8 ? 'YES' : 'NO'}</code>)</div>
+                      <div>• <strong>Source of Truth:</strong> <code>ground_station/command_router/command_registry.py</code> & <code>firmware/main/command/nexus_command_registry.h</code></div>
+                    </div>
+
+                    <h5 style="margin-top: 1rem;">Error Handling & Status Codes</h5>
+                    <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.6;">
+                      <div>• <code>REJECTED (1)</code>: Parameter validation failed, missing required key, or range exceeded.</div>
+                      <div>• <code>TIMEOUT (6)</code>: ESP32 did not acknowledge frame within deadline (${dest === 'GROUND_STATION' ? 'N/A' : 'default 2.0s'}).</div>
+                      <div>• <code>UNSUPPORTED (3)</code>: Command defined in catalog but not implemented in current build.</div>
+                      ${cmd.requires_confirmation ? '<div>• <code>CONFIRMATION_REQUIRED (7)</code>: Hazardous operation transmitted without confirmation flag.</div>' : ''}
+                    </div>
                   </div>
-                  <div style="font-size:0.7rem; color:#94a3b8; margin-bottom:0.4rem;">${exampleNote}</div>
-                  <div class="ref-code-block">${escapeHtml(exampleRequestJson)}</div>
 
-                  <h5 style="margin-top: 1rem;">Expected Response Envelope (JSON)</h5>
-                  <div class="ref-code-block">${escapeHtml(exampleResponseJson)}</div>
+                  <div class="cmd-detail-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem; flex-wrap:wrap; gap:0.35rem;">
+                      <h5 style="margin:0;">Request Payload (JSON)</h5>
+                      ${exampleTypeBadge}
+                    </div>
+                    <div style="font-size:0.7rem; color:#94a3b8; margin-bottom:0.4rem;">${exampleNote}</div>
+                    <div class="ref-code-block">${escapeHtml(exampleRequestJson)}</div>
 
-                  <h5 style="margin-top: 1rem;">Error Handling & Status Codes</h5>
-                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.6;">
-                    <div>• <code>REJECTED (1)</code>: Parameter validation failed, missing required key, or range exceeded.</div>
-                    <div>• <code>TIMEOUT (6)</code>: ESP32 did not acknowledge frame within deadline (${dest === 'GROUND_STATION' ? 'N/A' : 'default 2.0s'}).</div>
-                    <div>• <code>UNSUPPORTED (3)</code>: Command defined in catalog but not implemented in current build.</div>
-                    ${cmd.requires_confirmation ? '<div>• <code>CONFIRMATION_REQUIRED (7)</code>: Hazardous operation transmitted without confirmation flag.</div>' : ''}
+                    <h5 style="margin-top: 1rem;">Expected Response Envelope (JSON)</h5>
+                    <div class="ref-code-block">${escapeHtml(exampleResponseJson)}</div>
                   </div>
                 </div>
               </div>
@@ -1542,7 +1629,7 @@
       // Commands badges with jump cross-links
       const cmdsHtml = p.commands.map(c => {
         const reqDot = c.required ? '<span style="color:#f43f5e;font-weight:bold;">*</span>' : '';
-        return `<button class="btn btn-sm btn-outline" style="font-size:0.65rem; padding:0.15rem 0.35rem; margin:0.15rem 0.15rem 0.15rem 0;" onclick="jumpToCommand('${c.verb}', '${c.noun}')" title="Click to view ${c.verb} ${c.noun} in Catalog">${escapeHtml(c.verb)} ${escapeHtml(c.noun)}${reqDot}</button>`;
+        return `<button class="btn btn-sm btn-outline" style="font-size:0.65rem; padding:0.15rem 0.35rem; margin:0.15rem 0.15rem 0.15rem 0;" onclick="jumpToCommand('${c.verb}', '${c.noun}', event)" title="Click to view ${c.verb} ${c.noun} in Catalog">${escapeHtml(c.verb)} ${escapeHtml(c.noun)}${reqDot}</button>`;
       }).join('');
 
       // Semantics badge

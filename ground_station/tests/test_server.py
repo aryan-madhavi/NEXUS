@@ -190,3 +190,55 @@ def test_api_command_local_dispatch(test_server: tuple[NexusGroundStationServer,
         assert resp.status == 200
         res = json.loads(resp.read().decode("utf-8"))
         assert res["code"] in (int(StatusCode.OK), int(StatusCode.TARGET_UNREACHABLE))
+
+
+def test_favicon_returns_no_content(test_server: tuple[NexusGroundStationServer, str]) -> None:
+    _, base_url = test_server
+    with urllib.request.urlopen(f"{base_url}/favicon.ico", timeout=2.0) as resp:
+        assert resp.status == 204
+
+
+def test_frontend_ux_ui_regression_invariants(test_server: tuple[NexusGroundStationServer, str]) -> None:
+    _, base_url = test_server
+
+    with urllib.request.urlopen(f"{base_url}/", timeout=2.0) as resp:
+        html = resp.read().decode("utf-8")
+    with urllib.request.urlopen(f"{base_url}/styles.css", timeout=2.0) as resp:
+        css = resp.read().decode("utf-8")
+    with urllib.request.urlopen(f"{base_url}/app.js", timeout=2.0) as resp:
+        js = resp.read().decode("utf-8")
+
+    # 1. HTML accessibility, favicon, and formatting invariants
+    assert "user-scalable=no" not in html
+    assert 'rel="icon"' in html
+    assert 'role="dialog"' in html and 'aria-modal="true"' in html
+    assert 'id="select-global-transport"' in html and 'aria-label="Global Transport Route"' in html
+    assert "{\\n  /* Select a command" not in html
+    assert "{\\n  /* Response envelope" not in html
+
+    # 2. CSS table, badge, banner, and responsive layout invariants
+    for selector in (
+        ".data-table",
+        ".table-container",
+        ".tag-warn",
+        ".tag-error",
+        ".tag-info",
+        ".banner-warn",
+        ".banner-info",
+        ".cmd-detail-bottom-grid",
+        ".service-meta",
+        ".param-helper-text",
+        ".param-jump-link",
+        "@media (max-width: 768px)",
+    ):
+        assert selector in css, f"Missing required CSS selector/rule: {selector}"
+
+    # 3. JS functional & UX regression invariants
+    assert "param.default !== undefined ? param.default : param.default_value" in js
+    assert "param.units || param.unit" in js
+    assert "String(state.currentCmd.destination || 'FIRMWARE').toUpperCase()" in js
+    assert "String(cmd.destination || 'FIRMWARE').toUpperCase()" in js
+    assert "rawTabId === 'tab-dashboard' ? 'tab-telemetry' : rawTabId" in js
+    assert "jumpToParameter = function(paramName, event)" in js
+    assert "e.key === 'Escape'" in js
+    assert "telemetry telemetry" not in js

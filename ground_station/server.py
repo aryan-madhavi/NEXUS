@@ -168,6 +168,11 @@ class NexusRequestHandler(BaseHTTPRequestHandler):
             self._serve_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
         elif path == "/app.js":
             self._serve_file(STATIC_DIR / "app.js", "application/javascript; charset=utf-8")
+        elif path == "/favicon.ico":
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self._send_cors_headers()
+            self.send_header("Content-Length", "0")
+            self.end_headers()
         # Navigation routes (SPA overview and diagnostics)
         elif path == "/overview":
             self._redirect_to("/#tab-dashboard")

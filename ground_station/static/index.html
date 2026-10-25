@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NEXUS Mission Control | EDU_ROBO V14</title>
   <meta name="description" content="Apollo-inspired environmental monitoring & command control center for NEXUS EDU_ROBO V14">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e1422'/%3E%3Cpolygon points='16,5 27,25 5,25' fill='%2300d2ff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,9 +35,9 @@
           <span class="badge-label">ROUTE</span>
           <span class="badge-text" id="transport-text">SCANNING</span>
         </div>
-        <div class="transport-selector-badge" style="display: flex; align-items: center; gap: 0.35rem; background: rgba(0,255,255,0.06); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(0,255,255,0.2);">
-          <span style="font-size: 0.7rem; color: #00ffff; font-family: monospace; font-weight: bold;">TRANSPORT:</span>
-          <select id="select-global-transport" class="form-control form-control-sm" style="background: #0d131f; color: #fff; border: 1px solid #1f2f47; font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: 3px; cursor: pointer;">
+        <div class="transport-selector-badge">
+          <label for="select-global-transport" class="transport-selector-label">TRANSPORT:</label>
+          <select id="select-global-transport" class="form-control form-control-sm transport-select" aria-label="Global Transport Route">
             <option value="auto">AUTO (Prefer Active)</option>
             <option value="serial">USB Serial</option>
             <option value="mqtt">MQTT / Wi-Fi</option>
@@ -54,7 +55,7 @@
         <div class="clock-label">SYSTEM TIME (UTC)</div>
         <div id="utc-clock" class="clock-value">00:00:00</div>
       </div>
-      <button id="refresh-all-btn" class="btn btn-icon" title="Refresh Telemetry">⟳</button>
+      <button id="refresh-all-btn" class="btn btn-icon" title="Refresh Telemetry" aria-label="Refresh Telemetry">⟳</button>
     </div>
   </header>
 
@@ -86,17 +87,17 @@
     </section>
 
     <!-- Navigation Tabs for Mobile & Desktop -->
-    <nav class="console-tabs" role="tablist">
-      <button class="tab-btn active" data-tab="tab-telemetry" role="tab" id="btn-tab-telemetry">Telemetry & Sensors</button>
-      <button class="tab-btn" data-tab="tab-command" role="tab" id="btn-tab-command">Command Console</button>
-      <button class="tab-btn" data-tab="tab-hardware" role="tab" id="btn-tab-hardware">Hardware Inventory</button>
-      <button class="tab-btn" data-tab="tab-history" role="tab" id="btn-tab-history">Audit & Logs</button>
-      <button class="tab-btn" data-tab="tab-services" role="tab" id="btn-tab-services">Mission Services</button>
-      <button class="tab-btn" data-tab="tab-reference" role="tab" id="btn-tab-reference">Command & Data Reference</button>
+    <nav class="console-tabs" role="tablist" aria-label="Mission Control Views">
+      <button class="tab-btn active" data-tab="tab-telemetry" role="tab" aria-selected="true" aria-controls="tab-telemetry" id="btn-tab-telemetry">Telemetry & Sensors</button>
+      <button class="tab-btn" data-tab="tab-command" role="tab" aria-selected="false" aria-controls="tab-command" id="btn-tab-command">Command Console</button>
+      <button class="tab-btn" data-tab="tab-hardware" role="tab" aria-selected="false" aria-controls="tab-hardware" id="btn-tab-hardware">Hardware Inventory</button>
+      <button class="tab-btn" data-tab="tab-history" role="tab" aria-selected="false" aria-controls="tab-history" id="btn-tab-history">Audit & Logs</button>
+      <button class="tab-btn" data-tab="tab-services" role="tab" aria-selected="false" aria-controls="tab-services" id="btn-tab-services">Mission Services</button>
+      <button class="tab-btn" data-tab="tab-reference" role="tab" aria-selected="false" aria-controls="tab-reference" id="btn-tab-reference">Command & Data Reference</button>
     </nav>
 
     <!-- TAB 1: Live Telemetry & Sensors -->
-    <section id="tab-telemetry" class="tab-panel active">
+    <section id="tab-telemetry" class="tab-panel active" role="tabpanel" aria-labelledby="btn-tab-telemetry">
       <div class="panel-header">
         <h2>Live Environmental Telemetry</h2>
         <span class="panel-subtitle">Acquired via serialized FreeRTOS sensor sampling pipeline</span>
@@ -276,7 +277,7 @@
     </section>
 
     <!-- TAB 2: Canonical Command Console -->
-    <section id="tab-command" class="tab-panel">
+    <section id="tab-command" class="tab-panel" role="tabpanel" aria-labelledby="btn-tab-command">
       <div class="panel-header">
         <h2>Canonical Command Dispatcher</h2>
         <span class="panel-subtitle">Driven dynamically by the authoritative 115-command NEXUS registry</span>
@@ -349,7 +350,9 @@
         <!-- Wire Preview & Execution Response Display -->
         <div class="command-preview-card">
           <h3 class="card-title">2. Outbound Wire Envelope Preview</h3>
-          <pre id="wire-preview" class="code-view json-preview">{\n  /* Select a command to preview wire envelope */\n}</pre>
+          <pre id="wire-preview" class="code-view json-preview">{
+  /* Select a command to preview wire envelope */
+}</pre>
 
           <h3 class="card-title" style="margin-top: 1.25rem;">3. Response & Execution Telemetry</h3>
           <div id="response-status-banner" class="status-banner banner-idle">
@@ -357,13 +360,15 @@
             <span id="banner-text">Awaiting operator transmission...</span>
           </div>
 
-          <pre id="response-preview" class="code-view json-response">{\n  /* Response envelope from target will appear here */\n}</pre>
+          <pre id="response-preview" class="code-view json-response">{
+  /* Response envelope from target will appear here */
+}</pre>
         </div>
       </div>
     </section>
 
     <!-- TAB 3: Hardware Inventory & Authority -->
-    <section id="tab-hardware" class="tab-panel">
+    <section id="tab-hardware" class="tab-panel" role="tabpanel" aria-labelledby="btn-tab-hardware">
       <div class="panel-header">
         <h2>EDU_ROBO V14 Hardware Availability Profile</h2>
         <span class="panel-subtitle">Authoritative hardware mapping: truthful inventory of mounted vs unmounted modules</span>
@@ -394,7 +399,6 @@
         <!-- Unmounted Hardware -->
         <div class="hardware-column">
           <h3 class="inventory-heading unmounted-heading">✖ Unmounted Modules (Truthful Rejection)</h3>
-          <p class="unmounted-notice">Commands addressing unmounted hardware return documented rejection code 3 (unsupported) rather than fabricated telemetry.</p>
           <div class="table-responsive">
             <table class="nexus-table" id="table-unmounted-hw">
               <thead>
@@ -409,16 +413,19 @@
                 <!-- Dynamically populated from /api/status -->
               </tbody>
             </table>
-          </div>
+          </div><br>
+          <p class="unmounted-notice">Note: Commands addressing unmounted hardware return documented rejection code 3 (unsupported) rather than fabricated telemetry.</p>
         </div>
       </div>
     </section>
 
     <!-- TAB 4: Audit Trail & Command History -->
-    <section id="tab-history" class="tab-panel">
-      <div class="panel-header">
-        <h2>Command & Response Audit Trail</h2>
-        <span class="panel-subtitle">Bounded chronological record of operator transmissions and firmware responses</span>
+    <section id="tab-history" class="tab-panel" role="tabpanel" aria-labelledby="btn-tab-history">
+      <div class="panel-header panel-header-row">
+        <div class="panel-header-titles">
+          <h2>Command & Response Audit Trail</h2>
+          <span class="panel-subtitle">Bounded chronological record of operator transmissions and firmware responses</span>
+        </div>
         <div class="header-actions">
           <button class="btn btn-sm btn-outline" id="btn-export-json">Export JSON</button>
           <button class="btn btn-sm btn-outline" id="btn-export-csv">Export CSV</button>
@@ -448,7 +455,7 @@
     </section>
 
     <!-- TAB 5: Mission Auxiliary Services -->
-    <section id="tab-services" class="tab-panel">
+    <section id="tab-services" class="tab-panel" role="tabpanel" aria-labelledby="btn-tab-services">
       <div class="panel-header">
         <h2>Mission Auxiliary Services & Tooling</h2>
         <span class="panel-subtitle">External visualization, time-series storage, and grounded AI assistant endpoints</span>
@@ -460,29 +467,29 @@
     </section>
 
     <!-- TAB 6: Command & Data Reference (Help) -->
-    <section id="tab-reference" class="tab-panel">
+    <section id="tab-reference" class="tab-panel" role="tabpanel" aria-labelledby="btn-tab-reference">
       <div class="panel-header">
         <h2>Command & Data Reference Manual</h2>
         <span class="panel-subtitle">Canonical command catalog, protocol enums, sensor mappings, and runtime entity discovery</span>
       </div>
 
       <!-- Reference Sub-Navigation -->
-      <div class="ref-subnav">
-        <button class="ref-subtab-btn active" data-ref-subtab="ref-panel-catalog" id="btn-subtab-catalog">1. Command Catalog (115)</button>
-        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-parameters" id="btn-subtab-parameters">2. Parameter Dictionary (27)</button>
-        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-sensors" id="btn-subtab-sensors">3. Sensor & Telemetry Dictionary</button>
-        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-events" id="btn-subtab-events">4. Event, Fault & Warning Dictionaries</button>
-        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-actuators" id="btn-subtab-actuators">5. Actuators & Peripherals</button>
-        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-workflows" id="btn-subtab-workflows">6. Runtime ID Discovery & Workflows</button>
-        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-protocol" id="btn-subtab-protocol">7. Protocol & Status Codes</button>
+      <div class="ref-subnav" role="tablist" aria-label="Reference Manual Sections">
+        <button class="ref-subtab-btn active" data-ref-subtab="ref-panel-catalog" role="tab" aria-selected="true" aria-controls="ref-panel-catalog" id="btn-subtab-catalog">1. Command Catalog (115)</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-parameters" role="tab" aria-selected="false" aria-controls="ref-panel-parameters" id="btn-subtab-parameters">2. Parameter Dictionary (27)</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-sensors" role="tab" aria-selected="false" aria-controls="ref-panel-sensors" id="btn-subtab-sensors">3. Sensor & Telemetry Dictionary</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-events" role="tab" aria-selected="false" aria-controls="ref-panel-events" id="btn-subtab-events">4. Event, Fault & Warning Dictionaries</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-actuators" role="tab" aria-selected="false" aria-controls="ref-panel-actuators" id="btn-subtab-actuators">5. Actuators & Peripherals</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-workflows" role="tab" aria-selected="false" aria-controls="ref-panel-workflows" id="btn-subtab-workflows">6. Runtime ID Discovery & Workflows</button>
+        <button class="ref-subtab-btn" data-ref-subtab="ref-panel-protocol" role="tab" aria-selected="false" aria-controls="ref-panel-protocol" id="btn-subtab-protocol">7. Protocol & Status Codes</button>
       </div>
 
       <!-- SUBPANEL 1: Command Catalog (115 Commands with Expandable Detail Drawers) -->
-      <div id="ref-panel-catalog" class="ref-subpanel active">
+      <div id="ref-panel-catalog" class="ref-subpanel active" role="tabpanel" aria-labelledby="btn-subtab-catalog">
         <!-- Filter / Search Bar -->
-        <div class="reference-filter-bar" style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
-          <input type="text" id="ref-search-input" placeholder="Search commands by verb, noun, parameter, ID (hex/dec), or description..." class="form-control" style="flex: 1; min-width: 280px; background: #0d131f; color: #fff; border: 1px solid #1f2f47; padding: 0.45rem 0.75rem; border-radius: 4px; font-size: 0.8rem;">
-          <div class="ref-filter-btns" style="display: flex; gap: 0.35rem;">
+        <div class="reference-filter-bar">
+          <input type="text" id="ref-search-input" aria-label="Search commands by verb, noun, parameter, ID, or description" placeholder="Search commands by verb, noun, parameter, ID (hex/dec), or description..." class="form-control ref-search-control">
+          <div class="ref-filter-btns">
             <button class="btn btn-sm btn-outline active" data-ref-filter="all" id="ref-filter-all">All Commands</button>
             <button class="btn btn-sm btn-outline" data-ref-filter="FIRMWARE" id="ref-filter-firmware">Firmware (ESP32)</button>
             <button class="btn btn-sm btn-outline" data-ref-filter="GROUND_STATION" id="ref-filter-ground">Ground Station</button>
@@ -494,7 +501,7 @@
         <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.75rem;">💡 Click any command row to expand its full parameter schema, valid ranges, runnable example payload, expected response, and error codes.</p>
 
         <!-- Reference Catalog Table -->
-        <div class="table-container" style="overflow-x: auto; max-height: 650px; border: 1px solid #1f2f47; border-radius: 6px;">
+        <div class="table-container">
           <table class="data-table" id="table-cmd-reference">
             <thead>
               <tr>
@@ -516,19 +523,19 @@
       </div>
 
       <!-- SUBPANEL 2: Parameter Dictionary (27 Parameters across 48 Instances) -->
-      <div id="ref-panel-parameters" class="ref-subpanel">
+      <div id="ref-panel-parameters" class="ref-subpanel" role="tabpanel" aria-labelledby="btn-subtab-parameters">
         <div class="panel-header" style="margin-bottom: 1rem;">
           <h3 style="color: #00ffff; font-size: 1rem;">Command Parameter Value Dictionary & Semantics</h3>
           <p style="font-size: 0.8rem; color: #a0aec0;">Comprehensive specification of all 27 parameter keys across all 115 registered commands: data types, value semantics, allowed ranges, units, defaults, sentinels, null/omission rules, and verified runtime discovery workflows.</p>
         </div>
 
         <!-- Filter / Search Bar for Parameters -->
-        <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
-          <input type="text" id="param-search-input" placeholder="Search parameters by key, semantic class, unit, or command..." class="form-control" style="flex: 1; min-width: 280px; background: #0d131f; color: #fff; border: 1px solid #1f2f47; padding: 0.45rem 0.75rem; border-radius: 4px; font-size: 0.8rem;">
+        <div class="reference-filter-bar">
+          <input type="text" id="param-search-input" aria-label="Search parameters by key, semantic class, unit, or command" placeholder="Search parameters by key, semantic class, unit, or command..." class="form-control ref-search-control">
           <span id="param-count-badge" class="badge badge-device" style="font-size: 0.75rem;">27 Parameters</span>
         </div>
 
-        <div class="table-container" style="overflow-x: auto; max-height: 650px; border: 1px solid #1f2f47; border-radius: 6px; margin-bottom: 1.5rem;">
+        <div class="table-container" style="margin-bottom: 1.5rem;">
           <table class="data-table" id="table-param-dictionary">
             <thead>
               <tr>
@@ -548,8 +555,8 @@
         </div>
       </div>
 
-      <!-- SUBPANEL 2: Sensor & Telemetry Dictionary -->
-      <div id="ref-panel-sensors" class="ref-subpanel">
+      <!-- SUBPANEL 3: Sensor & Telemetry Dictionary -->
+      <div id="ref-panel-sensors" class="ref-subpanel" role="tabpanel" aria-labelledby="btn-subtab-sensors">
         <div class="panel-header" style="margin-bottom: 1rem;">
           <h3 style="color: #00ffff; font-size: 1rem;">Sensor Identifiers & Telemetry Field Mappings</h3>
           <p style="font-size: 0.8rem; color: #a0aec0;">Comprehensive hardware pinout, data types, units, telemetry field names, and AI tool mapping for all EDU_ROBO V14 sensors.</p>
@@ -655,8 +662,8 @@
         </div>
       </div>
 
-      <!-- SUBPANEL 3: Event, Fault & Warning Dictionaries -->
-      <div id="ref-panel-events" class="ref-subpanel">
+      <!-- SUBPANEL 4: Event, Fault & Warning Dictionaries -->
+      <div id="ref-panel-events" class="ref-subpanel" role="tabpanel" aria-labelledby="btn-subtab-events">
         <div class="panel-header" style="margin-bottom: 1rem;">
           <h3 style="color: #00ffff; font-size: 1rem;">Firmware Event Queue & Operational Fault Dictionaries</h3>
           <p style="font-size: 0.8rem; color: #a0aec0;">Authoritative enumeration of all event types defined in <code>nexus_event_queue.h</code> and ground station monitoring rules in <code>ground_station/monitoring</code>.</p>
@@ -743,8 +750,8 @@
         </div>
       </div>
 
-      <!-- SUBPANEL 4: Actuators & Peripherals -->
-      <div id="ref-panel-actuators" class="ref-subpanel">
+      <!-- SUBPANEL 5: Actuators & Peripherals -->
+      <div id="ref-panel-actuators" class="ref-subpanel" role="tabpanel" aria-labelledby="btn-subtab-actuators">
         <div class="panel-header" style="margin-bottom: 1rem;">
           <h3 style="color: #00ffff; font-size: 1rem;">Actuators & Peripheral Outputs</h3>
           <p style="font-size: 0.8rem; color: #a0aec0;">Hardware pin assignments, valid ranges, safety constraints, and control commands for all system outputs.</p>
@@ -851,7 +858,7 @@
       </div>
 
       <!-- SUBPANEL 6: Runtime ID Discovery Workflows -->
-      <div id="ref-panel-workflows" class="ref-subpanel">
+      <div id="ref-panel-workflows" class="ref-subpanel" role="tabpanel" aria-labelledby="btn-subtab-workflows">
         <div class="panel-header" style="margin-bottom: 1rem;">
           <h3 style="color: #00ffff; font-size: 1rem;">Runtime Identifier Discovery & Acknowledgement Workflows</h3>
           <p style="font-size: 0.8rem; color: #a0aec0;">Standard operating procedures for discovering runtime entity IDs (events, faults, warnings), mapping values, and executing verifiable acknowledgements without guessing.</p>
@@ -946,8 +953,8 @@
         </div>
       </div>
 
-      <!-- SUBPANEL 6: Protocol & Status Codes -->
-      <div id="ref-panel-protocol" class="ref-subpanel">
+      <!-- SUBPANEL 7: Protocol & Status Codes -->
+      <div id="ref-panel-protocol" class="ref-subpanel" role="tabpanel" aria-labelledby="btn-subtab-protocol">
         <div class="panel-header" style="margin-bottom: 1rem;">
           <h3 style="color: #00ffff; font-size: 1rem;">Protocol Envelope Specification & Status Codes</h3>
           <p style="font-size: 0.8rem; color: #a0aec0;">Authoritative wire packet structure, execution routing targets, and response status codes.</p>
@@ -1013,11 +1020,11 @@
   </main>
 
   <!-- Hazardous Operation Confirmation Modal -->
-  <div id="confirmation-modal" class="modal-overlay" style="display: none;">
+  <div id="confirmation-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" style="display: none;">
     <div class="modal-card">
       <div class="modal-head">
         <span class="modal-warn-icon">⚠️</span>
-        <h3 class="modal-title">Hazardous Operation Confirmation</h3>
+        <h3 class="modal-title" id="modal-title">Hazardous Operation Confirmation</h3>
       </div>
       <div class="modal-body">
         <p id="modal-warning-text">This command modifies executive state, flushes history, or resets fault counters.</p>
